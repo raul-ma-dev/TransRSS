@@ -9,7 +9,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,7 +26,7 @@ class RssNavigationStateTest {
     fun switchingFeedsUsesCacheAndRefreshesBothSourcesForAudioboom() = onMain {
         val downloads = mutableListOf<String>()
         val saved = SavedStateHandle()
-        val reader = RssViewModel(saved, canaltransEnabled = true) { url -> downloads += url; sample(url) }
+        val reader = RssViewModel(saved, canaltransTabEnabled = true) { url -> downloads += url; sample(url) }
         val store = ViewModelStore().apply { put("reader", reader) }
         try {
             assertEquals(RssSource.CANALTRANS.url, reader.feed?.baseUrl)
@@ -52,7 +51,7 @@ class RssNavigationStateTest {
     @Test
     fun backgroundDownloadCannotReplaceSelectedFeed() = onMain {
         val pending = RssSource.entries.associateWith { CompletableDeferred<RssFeed>() }
-        val reader = RssViewModel(SavedStateHandle(), canaltransEnabled = true) { url ->
+        val reader = RssViewModel(SavedStateHandle(), canaltransTabEnabled = true) { url ->
             pending.getValue(RssSource.entries.first { it.url == url }).await()
         }
         val store = ViewModelStore().apply { put("reader", reader) }
@@ -73,13 +72,13 @@ class RssNavigationStateTest {
 
     @Test
     fun errorsAreIsolatedAndSavedSelectionIsRestored() = onMain {
-        val reader = RssViewModel(SavedStateHandle(), canaltransEnabled = true) { url ->
+        val reader = RssViewModel(SavedStateHandle(), canaltransTabEnabled = true) { url ->
             if (url == RssSource.AUDIOBOOM.url) throw IOException("Sin conexión")
             sample(url)
         }
         val restored = RssViewModel(
             SavedStateHandle(mapOf("selectedSource" to RssSource.AUDIOBOOM.name)),
-            canaltransEnabled = true
+            canaltransTabEnabled = true
         ) { sample(it) }
         val store = ViewModelStore().apply { put("reader", reader); put("restored", restored) }
         try {
@@ -104,7 +103,7 @@ class RssNavigationStateTest {
             "Podcast", "<p>No usar esta descripción</p>", "", "Wed, 30 Sep 2026 03:11:00 +0000",
             audioUrl = "https://example.com/podcast.mp3"
         )
-        val reader = RssViewModel(SavedStateHandle(), canaltransEnabled = true) { url ->
+        val reader = RssViewModel(SavedStateHandle(), canaltransTabEnabled = true) { url ->
             if (url == RssSource.CANALTRANS.url) {
                 sample(url).copy(entries = listOf(news, radio.copy(categories = if (radioCategory) listOf("Radio") else emptyList())))
             } else sample(url).copy(entries = listOf(podcast))
@@ -129,7 +128,7 @@ class RssNavigationStateTest {
     @Test
     fun radioRemainsAvailableWhenAudioboomFails() = onMain {
         val radio = RssEntry("Radio", "<p>Descripción</p>", "", "", categories = listOf("Radio"))
-        val reader = RssViewModel(SavedStateHandle(), canaltransEnabled = true) { url ->
+        val reader = RssViewModel(SavedStateHandle(), canaltransTabEnabled = true) { url ->
             if (url == RssSource.AUDIOBOOM.url) throw IOException("Sin conexión")
             sample(url).copy(entries = listOf(radio))
         }
@@ -147,46 +146,61 @@ class RssNavigationStateTest {
     }
 
     @Test
-    fun audioboomOnlyNeverDownloadsCanaltransEvenWithOldSavedSelection() = onMain {
+    fun hiddenCanaltransStillDownloadsAndCombinesWithAudioboom() = onMain {
         val saved = SavedStateHandle(mapOf("selectedSource" to RssSource.CANALTRANS.name))
         val downloads = mutableListOf<String>()
-        val original = sample(RssSource.AUDIOBOOM.url).copy(
-            entries = listOf(RssEntry("Podcast original", "<p>Datos de Audioboom</p>", "", ""))
+        val information = RssEntry(
+            "Información Canaltrans", "<p>Descripción completa</p>", "https://canaltrans.com/radio",
+            "Wed, 30 Sep 2026 01:11:10 -0300", categories = listOf("Radio")
         )
-        val reader = RssViewModel(saved, canaltransEnabled = false) { url ->
-            assertEquals(RssSource.AUDIOBOOM.url, url)
+        val audio = RssEntry(
+            "Audio original", "", "", "Wed, 30 Sep 2026 03:11:00 +0000",
+            audioUrl = "https://audioboom.com/episode.mp3"
+        )
+        val reader = RssViewModel(saved, canaltransTabEnabled = false) { url ->
             downloads += url
-            original
+            sample(url).copy(entries = if (url == RssSource.CANALTRANS.url) listOf(information) else listOf(audio))
         }
         val store = ViewModelStore().apply { put("reader", reader) }
         try {
             assertEquals(listOf(RssSource.AUDIOBOOM), reader.availableSources)
             assertEquals(RssSource.AUDIOBOOM, reader.selectedSource)
             assertEquals(RssSource.AUDIOBOOM.name, saved.get<String>("selectedSource"))
-            assertSame(original, reader.feed)
+            assertEquals(information.title, reader.feed?.entries?.single()?.title)
+            assertEquals(information.html, reader.feed?.entries?.single()?.html)
+            assertEquals(audio.audioUrl, reader.feed?.entries?.single()?.audioUrl)
             reader.selectSource(RssSource.CANALTRANS)
             assertEquals(RssSource.AUDIOBOOM, reader.selectedSource)
             reader.refresh()
-            assertEquals(listOf(RssSource.AUDIOBOOM.url, RssSource.AUDIOBOOM.url), downloads)
+            assertEquals(
+                listOf(RssSource.CANALTRANS.url, RssSource.AUDIOBOOM.url, RssSource.CANALTRANS.url, RssSource.AUDIOBOOM.url),
+                downloads
+            )
         } finally {
             store.clear()
         }
     }
 
     @Test
-    fun audioboomOnlyDoesNotFallbackToCanaltransAfterNetworkError() = onMain {
+    fun hiddenCanaltransInformationRemainsAvailableWhenAudioDownloadFails() = onMain {
         val downloads = mutableListOf<String>()
-        val reader = RssViewModel(SavedStateHandle(), canaltransEnabled = false) { url ->
+        val information = RssEntry("Radio", "<p>Información</p>", "", "", categories = listOf("Radio"))
+        val reader = RssViewModel(SavedStateHandle(), canaltransTabEnabled = false) { url ->
             downloads += url
-            throw IOException("Sin conexión")
+            if (url == RssSource.AUDIOBOOM.url) throw IOException("Sin conexión")
+            sample(url).copy(entries = listOf(information))
         }
         val store = ViewModelStore().apply { put("reader", reader) }
         try {
             assertNotNull(reader.error)
-            assertNull(reader.feed)
+            assertEquals(listOf(information.title), reader.feed?.entries?.map { it.title })
+            assertEquals("", reader.feed?.entries?.single()?.audioUrl)
             reader.selectSource(RssSource.CANALTRANS)
             reader.refresh()
-            assertEquals(listOf(RssSource.AUDIOBOOM.url, RssSource.AUDIOBOOM.url), downloads)
+            assertEquals(
+                listOf(RssSource.CANALTRANS.url, RssSource.AUDIOBOOM.url, RssSource.CANALTRANS.url, RssSource.AUDIOBOOM.url),
+                downloads
+            )
         } finally {
             store.clear()
         }

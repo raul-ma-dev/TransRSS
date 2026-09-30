@@ -20,12 +20,12 @@ private val SampleArticle = RssEntry(
     date = "30 de septiembre de 2026"
 )
 
-private val SampleAudioboomEpisode = SampleArticle.copy(
-    title = "Episodio de Audioboom",
+private val SampleCombinedEpisode = SampleArticle.copy(
+    title = "Radio de Canaltrans",
     html = "<img src=\"https://example.com/portada.jpg\" alt=\"Portada\">" + SampleArticle.html,
-    categories = listOf("Podcast"),
+    categories = listOf("Radio", "Podcast"),
     audioUrl = "https://example.com/episodio.mp3",
-    baseUrl = RssSource.AUDIOBOOM.url
+    baseUrl = RssSource.CANALTRANS.url
 )
 
 private val SampleCanaltransFeed = RssFeed(
@@ -41,9 +41,9 @@ private val SampleCanaltransFeed = RssFeed(
 private val SampleAudioboomFeed = RssFeed(
     title = "Audioboom",
     entries = listOf(
-        SampleAudioboomEpisode,
-        SampleAudioboomEpisode.copy(title = "Episodio de ayer", date = "29 de septiembre de 2026"),
-        SampleAudioboomEpisode.copy(title = "Episodio anterior", date = "28 de septiembre de 2026")
+        SampleCombinedEpisode,
+        SampleCombinedEpisode.copy(title = "Radio de ayer", date = "29 de septiembre de 2026"),
+        SampleCombinedEpisode.copy(title = "Radio anterior", date = "28 de septiembre de 2026")
     ),
     baseUrl = RssSource.AUDIOBOOM.url
 )
@@ -55,7 +55,7 @@ private fun PreviewTheme(content: @Composable () -> Unit) {
     }
 }
 
-@Preview(name = "Inicio · Canaltrans (desactivado)", group = "RSS", showBackground = true, widthDp = 360, heightDp = 800)
+@Preview(name = "Inicio · Canaltrans (pestaña oculta)", group = "RSS", showBackground = true, widthDp = 360, heightDp = 800)
 @Composable
 private fun CanaltransHomePreview() {
     PreviewTheme {
@@ -99,7 +99,7 @@ private fun BottomNavigationPreview() {
     PreviewTheme { FeedBottomNavigation(RssSource.AUDIOBOOM) }
 }
 
-@Preview(name = "Tarjeta completa · Canaltrans (desactivado)", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 560)
+@Preview(name = "Tarjeta completa · Canaltrans (pestaña oculta)", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 560)
 @Composable
 private fun CanaltransCardPreview() {
     PreviewTheme { CanaltransArticleCard(SampleArticle, RssSource.CANALTRANS.url, Modifier.padding(16.dp)) }
@@ -108,5 +108,5 @@ private fun CanaltransCardPreview() {
 @Preview(name = "Artículo con audio", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 760)
 @Composable
 private fun AudioArticlePreview() {
-    PreviewTheme { Article(SampleAudioboomEpisode, RssSource.AUDIOBOOM.url, onBack = {}) }
+    PreviewTheme { Article(SampleCombinedEpisode, RssSource.CANALTRANS.url, onBack = {}) }
 }

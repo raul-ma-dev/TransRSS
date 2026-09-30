@@ -1,8 +1,8 @@
 package com.rama.rss.reader
 
-// Temporary test mode. Set to true to restore Canaltrans and feed matching.
-internal const val CANALTRANS_ENABLED = false
+// Controls only menu visibility. Canaltrans still supplies information for Audioboom.
+internal const val CANALTRANS_TAB_ENABLED = false
 
-internal fun enabledRssSources(canaltransEnabled: Boolean = CANALTRANS_ENABLED): List<RssSource> =
-    if (canaltransEnabled) listOf(RssSource.CANALTRANS, RssSource.AUDIOBOOM)
+internal fun enabledRssSources(canaltransTabEnabled: Boolean = CANALTRANS_TAB_ENABLED): List<RssSource> =
+    if (canaltransTabEnabled) listOf(RssSource.CANALTRANS, RssSource.AUDIOBOOM)
     else listOf(RssSource.AUDIOBOOM)

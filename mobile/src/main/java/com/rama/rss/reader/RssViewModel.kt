@@ -26,12 +26,12 @@ private data class FeedState(
 
 class RssViewModel internal constructor(
     private val savedState: SavedStateHandle,
-    private val canaltransEnabled: Boolean = CANALTRANS_ENABLED,
+    canaltransTabEnabled: Boolean = CANALTRANS_TAB_ENABLED,
     private val loadFeed: suspend (String) -> RssFeed
 ) : ViewModel() {
-    constructor(savedState: SavedStateHandle) : this(savedState, CANALTRANS_ENABLED, RssRepository()::load)
+    constructor(savedState: SavedStateHandle) : this(savedState, CANALTRANS_TAB_ENABLED, RssRepository()::load)
 
-    val availableSources: List<RssSource> = enabledRssSources(canaltransEnabled)
+    val availableSources: List<RssSource> = enabledRssSources(canaltransTabEnabled)
 
     var selectedSource by mutableStateOf(
         runCatching { RssSource.valueOf(savedState.get<String>("selectedSource").orEmpty()) }
@@ -43,7 +43,7 @@ class RssViewModel internal constructor(
     val feed: RssFeed? by derivedStateOf {
         when (selectedSource) {
             RssSource.CANALTRANS -> canaltransWithoutRadio(states[RssSource.CANALTRANS]?.feed)
-            RssSource.AUDIOBOOM -> if (!canaltransEnabled) states[RssSource.AUDIOBOOM]?.feed else audioboomWithRadio(
+            RssSource.AUDIOBOOM -> audioboomWithRadio(
                 states[RssSource.CANALTRANS]?.feed, states[RssSource.AUDIOBOOM]?.feed
             )
         }
@@ -75,7 +75,7 @@ class RssViewModel internal constructor(
 
     private fun requiredSources(): List<RssSource> = when (selectedSource) {
         RssSource.CANALTRANS -> listOf(RssSource.CANALTRANS)
-        RssSource.AUDIOBOOM -> availableSources
+        RssSource.AUDIOBOOM -> listOf(RssSource.CANALTRANS, RssSource.AUDIOBOOM)
     }
 
     private fun download(source: RssSource) {

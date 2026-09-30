@@ -31,7 +31,7 @@ class RssBottomNavigationTest {
         lateinit var reader: RssViewModel
         val store = ViewModelStore()
         compose.runOnUiThread {
-            reader = RssViewModel(SavedStateHandle(), canaltransEnabled = true) { url ->
+            reader = RssViewModel(SavedStateHandle(), canaltransTabEnabled = true) { url ->
                 val source = RssSource.entries.first { it.url == url }
                 val news = RssEntry("Entrada Canaltrans", "<p>Texto</p>", "https://example.com/article", "")
                 val radio = RssEntry(
@@ -72,11 +72,11 @@ class RssBottomNavigationTest {
     }
 
     @Test
-    fun temporaryModeShowsOnlyAudioboomInNavigation() {
+    fun hiddenCanaltransTabLeavesOnlyAudioboomInNavigation() {
         lateinit var reader: RssViewModel
         val store = ViewModelStore()
         compose.runOnUiThread {
-            reader = RssViewModel(SavedStateHandle(), canaltransEnabled = false) { url ->
+            reader = RssViewModel(SavedStateHandle(), canaltransTabEnabled = false) { url ->
                 RssFeed("Podcast", emptyList(), url)
             }
             store.put("reader", reader)
