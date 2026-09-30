@@ -1,2 +1,3 @@
 com.rama.rss.shared
+drawable background
 xml automotive_app_desc

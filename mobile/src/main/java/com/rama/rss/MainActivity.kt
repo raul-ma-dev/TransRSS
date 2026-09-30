@@ -13,32 +13,39 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -46,6 +53,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.rama.rss.reader.RssEntry
 import com.rama.rss.reader.RssViewModel
 import com.rama.rss.reader.escapeHtml
+import com.rama.rss.shared.R as SharedR
 import com.rama.rss.ui.theme.RssTheme
 
 class MainActivity : ComponentActivity() {
@@ -54,7 +62,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val reader = ViewModelProvider(this)[RssViewModel::class.java]
         setContent {
-            RssTheme {
+            RssTheme(darkTheme = true, dynamicColor = false) {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     RssReader(reader, Modifier.padding(innerPadding))
                 }
@@ -63,6 +71,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RssReader(reader: RssViewModel, modifier: Modifier = Modifier) {
     var selectedIndex by rememberSaveable { mutableIntStateOf(-1) }
@@ -73,38 +82,34 @@ private fun RssReader(reader: RssViewModel, modifier: Modifier = Modifier) {
         Article(selected, feed.baseUrl, { selectedIndex = -1 }, modifier)
         return
     }
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Lector RSS", style = MaterialTheme.typography.headlineMedium)
-        OutlinedTextField(
-            value = reader.url,
-            onValueChange = reader::updateUrl,
-            label = { Text("URL del feed") },
-            placeholder = { Text("https://ejemplo.com/feed.xml") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            singleLine = true,
-            enabled = !reader.loading,
-            modifier = Modifier.fillMaxWidth()
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        Image(
+            painter = painterResource(SharedR.drawable.background),
+            contentDescription = null,
+            modifier = Modifier.matchParentSize(),
+            contentScale = ContentScale.Crop,
+            alpha = 0.45f
         )
-        Button(
-            onClick = { selectedIndex = -1; reader.load() },
-            enabled = reader.url.isNotBlank() && !reader.loading
-        ) { Text(if (reader.loading) "Cargando…" else "Cargar feed") }
-        if (reader.loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        reader.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        if (feed == null && !reader.loading) {
-            Text("Introduce la URL HTTPS de tu feed RSS o Atom para leer sus entradas.")
-        }
-        if (feed != null) {
-            Text(plainText(feed.title), style = MaterialTheme.typography.titleLarge)
-            if (feed.entries.isEmpty()) Text("Este feed no contiene entradas.")
+        PullToRefreshBox(
+            isRefreshing = reader.loading,
+            onRefresh = reader::refresh,
+            modifier = Modifier.fillMaxSize()
+        ) {
             LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(feed.entries) { index, entry ->
+                reader.error?.let { message ->
+                    item { Text(message, color = MaterialTheme.colorScheme.error) }
+                }
+                if (feed != null) {
+                    item { Text(plainText(feed.title), style = MaterialTheme.typography.titleLarge) }
+                    if (feed.entries.isEmpty()) {
+                        item { Text("Este feed no contiene entradas.") }
+                    }
+                }
+                itemsIndexed(feed?.entries.orEmpty()) { index, entry ->
                     Card(modifier = Modifier.fillMaxWidth().clickable { selectedIndex = index }) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(plainText(entry.title), style = MaterialTheme.typography.titleMedium)
@@ -123,10 +128,23 @@ private fun RssReader(reader: RssViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun readerBackground(): Brush {
+    val colors = MaterialTheme.colorScheme
+    return Brush.verticalGradient(
+        listOf(
+            lerp(colors.surface, colors.primaryContainer, 0.4f),
+            colors.surface,
+            lerp(colors.surface, colors.tertiaryContainer, 0.25f)
+        )
+    )
+}
+
+@Composable
 private fun Article(entry: RssEntry, baseUrl: String, onBack: () -> Unit, modifier: Modifier) {
     val context = LocalContext.current
-    val document = articleDocument(entry)
-    Column(modifier.fillMaxSize()) {
+    val colors = MaterialTheme.colorScheme
+    val document = articleDocument(entry, colors.onSurface.toCssHex(), colors.primary.toCssHex())
+    Column(modifier.fillMaxSize().background(readerBackground())) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onBack) { Text("Volver") }
             if (entry.link.isNotBlank()) {
@@ -137,6 +155,7 @@ private fun Article(entry: RssEntry, baseUrl: String, onBack: () -> Unit, modifi
             modifier = Modifier.fillMaxWidth().weight(1f),
             factory = { viewContext ->
                 WebView(viewContext).apply {
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     settings.javaScriptEnabled = false
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
@@ -174,18 +193,30 @@ private fun openInBrowser(context: Context, address: String) {
     }
 }
 
-internal fun articleDocument(entry: RssEntry): String = """
+private fun Color.toCssHex(): String = "#%06X".format(toArgb() and 0xFFFFFF)
+
+internal fun articleDocument(
+    entry: RssEntry,
+    textColor: String = "#E5E7EB",
+    linkColor: String = "#FF8A91"
+): String = """
     <!doctype html>
     <html lang="es"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
     <style>
-      body { font: 18px/1.6 sans-serif; margin: 20px; overflow-wrap: anywhere; color: #202124; background: #fff; }
+      :root { color-scheme: dark; }
+      html, body { background: transparent; }
+      body { font: 18px/1.6 sans-serif; margin: 20px; overflow-wrap: anywhere; color: $textColor; }
       h1 { font-size: 1.6em; line-height: 1.3; } img, video { max-width: 100%; height: auto; }
-      pre { white-space: pre-wrap; } table { display: block; overflow-x: auto; }
-      a { color: #1565c0; } .date { font-size: .85em; opacity: .7; }
-      @media (prefers-color-scheme: dark) { body { color: #eee; background: #121212; } a { color: #90caf9; } }
+      pre { white-space: pre-wrap; padding: 12px; background: #2B1E21; border-radius: 8px; }
+      code { background: #2B1E21; border-radius: 4px; }
+      blockquote { margin: 16px 0; padding: 8px 16px; border-left: 3px solid $linkColor; background: #24191C; }
+      table { display: block; overflow-x: auto; } th, td { border-bottom: 1px solid #51363B; padding: 8px; }
+      hr { border: 0; border-top: 1px solid #51363B; }
+      a { color: $linkColor; } .date { font-size: .85em; opacity: .7; }
     </style></head><body>
     <h1>${escapeHtml(plainText(entry.title))}</h1>
     <p class="date">${escapeHtml(entry.date)}</p>
