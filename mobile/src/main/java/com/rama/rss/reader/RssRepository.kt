@@ -4,7 +4,6 @@ import android.util.Xml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
-import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -13,7 +12,10 @@ data class RssEntry(
     val title: String,
     val html: String,
     val link: String,
-    val date: String
+    val date: String,
+    val audioUrl: String = "",
+    val categories: List<String> = emptyList(),
+    val baseUrl: String = ""
 )
 
 data class RssFeed(val title: String, val entries: List<RssEntry>, val baseUrl: String)
@@ -36,8 +38,9 @@ class RssRepository {
                     url = secureUrl(URL(url, location).toString())
                 } else {
                     check(code in 200..299) { "No se pudo descargar el feed (HTTP $code)." }
-                    val bytes = connection.inputStream.use { it.readBytesLimited() }
-                    return@withContext RssFeedParser.parse(ByteArrayInputStream(bytes), url.toString())
+                    return@withContext LimitedFeedInputStream(connection.inputStream).buffered().use {
+                        RssFeedParser.parse(it, url.toString())
+                    }
                 }
             } finally {
                 connection.disconnect()
@@ -58,17 +61,6 @@ class RssRepository {
         return url
     }
 
-    private fun InputStream.readBytesLimited(): ByteArray {
-        val output = java.io.ByteArrayOutputStream()
-        val buffer = ByteArray(8192)
-        while (true) {
-            val count = read(buffer)
-            if (count == -1) break
-            require(output.size() + count <= 5 * 1024 * 1024) { "El feed supera el límite de 5 MB." }
-            output.write(buffer, 0, count)
-        }
-        return output.toByteArray()
-    }
 }
 
 object RssFeedParser {
@@ -89,7 +81,7 @@ object RssFeedParser {
                 }
                 when (parser.name) {
                     "item", "entry" -> {
-                        if (entries.size < 300) entries += readEntry(parser, baseUrl)
+                        entries += readEntry(parser, baseUrl)
                     }
                     "title" -> if (title.isBlank()) title = readValue(parser)
                 }
@@ -107,6 +99,8 @@ object RssFeedParser {
         var content = ""
         var link = ""
         var date = ""
+        var audioUrl = ""
+        val categories = mutableListOf<String>()
         while (parser.next() != XmlPullParser.END_DOCUMENT) {
             if (parser.eventType == XmlPullParser.END_TAG && parser.depth == depth) break
             if (parser.eventType != XmlPullParser.START_TAG || parser.depth != depth + 1) continue
@@ -116,17 +110,45 @@ object RssFeedParser {
                 "encoded", "content" -> content = readValue(parser)
                 "pubDate", "published", "date" -> date = readValue(parser)
                 "updated" -> if (date.isBlank()) date = readValue(parser)
+                "category" -> {
+                    val term = parser.getAttributeValue(null, "term")
+                    val category = (term ?: readValue(parser)).trim()
+                    if (category.isNotBlank()) categories += category
+                }
+                "enclosure" -> {
+                    val type = parser.getAttributeValue(null, "type").orEmpty()
+                    if (audioUrl.isBlank() && type.startsWith("audio/", ignoreCase = true)) {
+                        audioUrl = resolveAudioUrl(parser.getAttributeValue(null, "url"), baseUrl)
+                    }
+                }
                 "link" -> {
                     val href = parser.getAttributeValue(null, "href")
                     val rel = parser.getAttributeValue(null, "rel")
                     if (href == null) link = readValue(parser)
                     else if (rel == null || rel == "alternate") link = href
+                    else if (rel == "enclosure" && audioUrl.isBlank() &&
+                        parser.getAttributeValue(null, "type").orEmpty().startsWith("audio/", ignoreCase = true)
+                    ) {
+                        audioUrl = resolveAudioUrl(href, baseUrl)
+                    }
                 }
             }
         }
         val resolvedLink = runCatching { URL(URL(baseUrl), link.trim()).toString() }
             .getOrDefault("").takeIf { link.isNotBlank() && (it.startsWith("https://") || it.startsWith("http://")) }.orEmpty()
-        return RssEntry(title.ifBlank { "Sin título" }, content.ifBlank { summary }, resolvedLink, date)
+        return RssEntry(
+            title.ifBlank { "Sin título" }, content.ifBlank { summary }, resolvedLink,
+            date, audioUrl, categories.distinct(), baseUrl
+        )
+    }
+
+    private fun resolveAudioUrl(value: String?, baseUrl: String): String {
+        if (value.isNullOrBlank()) return ""
+        return runCatching {
+            URL(URL(baseUrl), value.trim()).takeIf {
+                it.protocol == "https" && it.host.isNotBlank() && it.userInfo == null
+            }?.toString().orEmpty()
+        }.getOrDefault("")
     }
 
     // RSS escapes HTML or uses CDATA; Atom may also contain nested XHTML.
