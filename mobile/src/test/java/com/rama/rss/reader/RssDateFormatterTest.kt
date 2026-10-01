@@ -7,7 +7,9 @@ import java.util.TimeZone
 class RssDateFormatterTest {
     @Test
     fun convertsRfc1123AndPreservesInstantAcrossMidnight() {
-        assertEquals("martes, 29/09/2026", formatRssDate("Wed, 30 Sep 2026 01:11:10 -0300"))
+        assertEquals("miércoles, 30/09/2026", formatRssDate("Wed, 30 Sep 2026 01:11:10 -0300"))
+        assertEquals("martes, 29/09/2026", formatRssDate("2026-09-30T02:30:00Z"))
+        assertEquals("miércoles, 30/09/2026", formatRssDate("2026-09-30T03:00:00Z"))
     }
 
     @Test
@@ -19,8 +21,8 @@ class RssDateFormatterTest {
 
     @Test
     fun usesFixedOffsetInSummerAndWinter() {
-        assertEquals("miércoles, 14/01/2026", formatRssDate("2026-01-15T05:30:00Z"))
-        assertEquals("martes, 14/07/2026", formatRssDate("2026-07-15T05:30:00Z"))
+        assertEquals("jueves, 15/01/2026", formatRssDate("2026-01-15T05:30:00Z"))
+        assertEquals("miércoles, 15/07/2026", formatRssDate("2026-07-15T05:30:00Z"))
     }
 
     @Test

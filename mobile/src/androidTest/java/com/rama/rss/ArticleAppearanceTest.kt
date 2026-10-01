@@ -15,13 +15,13 @@ class ArticleAppearanceTest {
     private val entry = RssEntry("Noticia", "<p>Contenido</p>", "", "30/09/2026")
 
     @Test
-    fun allArticlesDisplayPublicationDateInUtcMinusSix() {
+    fun allArticlesDisplayPublicationDateInGmtMinusThree() {
         val datedEntry = entry.copy(date = "Wed, 30 Sep 2026 01:11:10 -0300")
         for (audioDetail in listOf(false, true)) {
             val document = articleDocument(datedEntry, audioDetail = audioDetail)
-            assertTrue(document.contains("<p class=\"date\">martes, 29/09/2026</p>"))
-            assertFalse(document.contains("22:11"))
-            assertFalse(document.contains("UTC-6"))
+            assertTrue(document.contains("<p class=\"date\">miércoles, 30/09/2026</p>"))
+            assertFalse(document.contains("01:11"))
+            assertFalse(document.contains("GMT-3"))
             assertFalse(document.contains(datedEntry.date))
         }
         assertEquals("Wed, 30 Sep 2026 01:11:10 -0300", datedEntry.date)
