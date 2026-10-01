@@ -28,12 +28,18 @@ class InlineArticleHtmlTest {
             "https://example.com/article",
             "30 de septiembre de 2026"
         )
+        assertExpandedInlineContent(entry)
+    }
+
+    private fun assertExpandedInlineContent(entry: RssEntry) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent {
                     RssTheme(darkTheme = true, dynamicColor = false) {
                         LazyColumn(Modifier.fillMaxSize()) {
-                            item { ArticleHtmlContent(entry, "https://example.com/feed.xml", Modifier.fillMaxWidth(), fitContent = true) }
+                            item {
+                                FeedArticleCard(entry, "https://example.com/feed.xml", Modifier.fillMaxWidth())
+                            }
                         }
                     }
                 }

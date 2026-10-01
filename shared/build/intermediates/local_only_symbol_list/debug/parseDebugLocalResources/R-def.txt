@@ -1,4 +1,13 @@
 R_DEF: Internal format may change without notice
 local
 drawable background
+drawable canaltrans
+drawable ecdqemsd
+drawable flame_01
+drawable flame_02
+drawable rocket
+drawable rocket_takeoff_android
+drawable smoke_01
+drawable smoke_02
+drawable sparks
 xml automotive_app_desc

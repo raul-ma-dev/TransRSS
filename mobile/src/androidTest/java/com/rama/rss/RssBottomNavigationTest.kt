@@ -3,6 +3,7 @@ package com.rama.rss
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,7 +28,7 @@ class RssBottomNavigationTest {
     val compose = createComposeRule()
 
     @Test
-    fun canaltransHasInlineCardsAndOnlyAudioboomOpensDetails() {
+    fun canaltransIsInlineAndAudioboomSummaryOpensDetail() {
         lateinit var reader: RssViewModel
         val store = ViewModelStore()
         compose.runOnUiThread {
@@ -54,15 +55,31 @@ class RssBottomNavigationTest {
             compose.setContent {
                 RssTheme(darkTheme = true, dynamicColor = false) { RssApp(reader) }
             }
+            compose.waitUntil(timeoutMillis = 5_000) { !reader.loading && reader.feed != null }
             compose.onNodeWithText("Canaltrans").assertIsSelected()
             compose.onNodeWithTag("CanaltransArticleCard")
                 .assertIsDisplayed()
                 .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick))
             compose.onNodeWithText("Abrir original").assertIsDisplayed()
             compose.onNodeWithText("Volver").assertDoesNotExist()
-            compose.onNodeWithText("Audioboom").performClick().assertIsSelected()
-            compose.onNodeWithText("Radio Canaltrans").performClick()
+            compose.onNodeWithText("Episodios").performClick().assertIsSelected()
+            compose.waitUntil(timeoutMillis = 5_000) { !reader.loading && reader.feed != null }
+            compose.onNodeWithText("En Caso De Eue El Mundo Se Desintegre").assertIsDisplayed()
+            compose.onNodeWithText("Audioboom").assertDoesNotExist()
+            compose.onNodeWithTag("AudioboomArticleCard")
+                .assertIsDisplayed()
+                .assertHasClickAction()
+            compose.onNodeWithText("Radio Canaltrans").assertIsDisplayed()
+            compose.onNodeWithText("Descripción Canaltrans").assertIsDisplayed()
+            compose.onNodeWithText("Abrir original").assertDoesNotExist()
+            compose.onNodeWithText("Volver").assertDoesNotExist()
+            compose.onNodeWithTag("AudioboomArticleCard").performClick()
             compose.onNodeWithText("Volver").assertIsDisplayed()
+            compose.onNodeWithText("Abrir original").assertIsDisplayed()
+            compose.onNodeWithTag("AudioboomArticleCard").assertDoesNotExist()
+            compose.onNodeWithText("Volver").performClick()
+            compose.onNodeWithTag("AudioboomArticleCard").assertIsDisplayed()
+            compose.onNodeWithText("Descripción Canaltrans").assertIsDisplayed()
             compose.onNodeWithText("Canaltrans").performClick().assertIsSelected()
             compose.onNodeWithTag("CanaltransArticleCard").assertIsDisplayed()
             compose.onNodeWithText("Volver").assertDoesNotExist()
@@ -85,7 +102,10 @@ class RssBottomNavigationTest {
             compose.setContent {
                 RssTheme(darkTheme = true, dynamicColor = false) { RssApp(reader) }
             }
-            compose.onNodeWithText("Audioboom").assertIsDisplayed().assertIsSelected()
+            compose.waitUntil(timeoutMillis = 5_000) { !reader.loading && reader.feed != null }
+            compose.onNodeWithText("Episodios").assertIsDisplayed().assertIsSelected()
+            compose.onNodeWithText("En Caso De Eue El Mundo Se Desintegre").assertIsDisplayed()
+            compose.onNodeWithText("Audioboom").assertDoesNotExist()
             compose.onNodeWithText("Canaltrans").assertDoesNotExist()
         } finally {
             compose.runOnUiThread { store.clear() }

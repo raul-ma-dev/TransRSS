@@ -17,7 +17,7 @@ private val SampleArticle = RssEntry(
     html = "<p>Una selección de historias y novedades para acompañar tu día.</p>" +
         "<p>Abre cada entrada para consultar su contenido completo y los enlaces publicados.</p>",
     link = "https://example.com/articulo",
-    date = "30 de septiembre de 2026"
+    date = "2026-09-30T18:30:00Z"
 )
 
 private val SampleCombinedEpisode = SampleArticle.copy(
@@ -32,8 +32,8 @@ private val SampleCanaltransFeed = RssFeed(
     title = "Canaltrans",
     entries = listOf(
         SampleArticle,
-        SampleArticle.copy(title = "Novedades de la semana", date = "29 de septiembre de 2026"),
-        SampleArticle.copy(title = "Lecturas recomendadas", date = "28 de septiembre de 2026")
+        SampleArticle.copy(title = "Novedades de la semana", date = "2026-09-29T18:30:00Z"),
+        SampleArticle.copy(title = "Lecturas recomendadas", date = "2026-09-28T18:30:00Z")
     ),
     baseUrl = RssSource.CANALTRANS.url
 )
@@ -42,8 +42,8 @@ private val SampleAudioboomFeed = RssFeed(
     title = "Audioboom",
     entries = listOf(
         SampleCombinedEpisode,
-        SampleCombinedEpisode.copy(title = "Radio de ayer", date = "29 de septiembre de 2026"),
-        SampleCombinedEpisode.copy(title = "Radio anterior", date = "28 de septiembre de 2026")
+        SampleCombinedEpisode.copy(title = "Radio de ayer", date = "2026-09-29T18:30:00Z"),
+        SampleCombinedEpisode.copy(title = "Radio anterior", date = "2026-09-28T18:30:00Z")
     ),
     baseUrl = RssSource.AUDIOBOOM.url
 )
@@ -102,10 +102,18 @@ private fun BottomNavigationPreview() {
 @Preview(name = "Tarjeta completa · Canaltrans (pestaña oculta)", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 560)
 @Composable
 private fun CanaltransCardPreview() {
-    PreviewTheme { CanaltransArticleCard(SampleArticle, RssSource.CANALTRANS.url, Modifier.padding(16.dp)) }
+    PreviewTheme { FeedArticleCard(SampleArticle, RssSource.CANALTRANS.url, Modifier.padding(16.dp)) }
 }
 
-@Preview(name = "Artículo con audio", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 760)
+@Preview(name = "Tarjeta · Audioboom", group = "Artículos", showBackground = true, widthDp = 360)
+@Composable
+private fun AudioboomCardPreview() {
+    PreviewTheme {
+        AudioboomSummaryCard(SampleCombinedEpisode, onClick = {}, modifier = Modifier.padding(16.dp))
+    }
+}
+
+@Preview(name = "Detalle · Audioboom", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 760)
 @Composable
 private fun AudioArticlePreview() {
     PreviewTheme { Article(SampleCombinedEpisode, RssSource.CANALTRANS.url, onBack = {}) }

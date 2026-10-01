@@ -1,6 +1,5 @@
 package com.rama.rss.reader
 
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -9,13 +8,23 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParserException
 import java.io.IOException
 
-enum class RssSource(val title: String, val url: String) {
-    CANALTRANS("Canaltrans", "https://canaltrans.com/rss/transrss.xml"),
-    AUDIOBOOM("Audioboom", "https://audioboom.com/channels/3716163.rss")
+enum class RssSource(val title: String, val url: String, val header: String = title) {
+
+    AUDIOBOOM(
+        "Episodios",
+        "https://audioboom.com/channels/3716163.rss",
+        "En Caso De Que El Mundo Se Desintegre"
+    ),
+    CANALTRANS("Noticias", "https://canaltrans.com/rss/transrss.xml", "Noticias CanalTrans"),
 }
 
 private data class FeedState(
@@ -40,15 +49,12 @@ class RssViewModel internal constructor(
         private set
     private val states = mutableStateMapOf<RssSource, FeedState>()
 
-    val feed: RssFeed? by derivedStateOf {
-        when (selectedSource) {
-            RssSource.CANALTRANS -> canaltransWithoutRadio(states[RssSource.CANALTRANS]?.feed)
-            RssSource.AUDIOBOOM -> audioboomWithRadio(
-                states[RssSource.CANALTRANS]?.feed, states[RssSource.AUDIOBOOM]?.feed
-            )
-        }
-    }
-    val loading: Boolean get() = requiredSources().any { states[it]?.loading == true }
+    private var preparedFeeds by mutableStateOf<Map<RssSource, RssFeed?>>(emptyMap())
+    private var preparing by mutableStateOf(false)
+    private var preparation: Job? = null
+
+    val feed: RssFeed? get() = preparedFeeds[selectedSource]
+    val loading: Boolean get() = preparing || requiredSources().any { states[it]?.loading == true }
     val error: String?
         get() = requiredSources().mapNotNull { source ->
             states[source]?.error?.let { message ->
@@ -81,6 +87,8 @@ class RssViewModel internal constructor(
     private fun download(source: RssSource) {
         val previous = states[source] ?: FeedState()
         if (previous.loading) return
+        preparation?.cancel()
+        preparing = false
         states[source] = previous.copy(loading = true, error = null)
         viewModelScope.launch {
             try {
@@ -102,6 +110,28 @@ class RssViewModel internal constructor(
                 )
             } finally {
                 states[source] = states.getValue(source).copy(loading = false)
+                if (states.values.none { it.loading }) prepareFeeds()
+            }
+        }
+    }
+
+    private fun prepareFeeds() {
+        val canaltrans = states[RssSource.CANALTRANS]?.feed
+        val audioboom = states[RssSource.AUDIOBOOM]?.feed
+        preparation?.cancel()
+        preparing = true
+        preparation = viewModelScope.launch {
+            try {
+                preparedFeeds = withContext(Dispatchers.Default) {
+                    buildMap {
+                        if (RssSource.CANALTRANS in availableSources) {
+                            put(RssSource.CANALTRANS, canaltransWithoutRadio(canaltrans))
+                        }
+                        put(RssSource.AUDIOBOOM, audioboomWithRadio(canaltrans, audioboom))
+                    }
+                }
+            } finally {
+                if (currentCoroutineContext().isActive) preparing = false
             }
         }
     }

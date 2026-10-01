@@ -29,10 +29,11 @@ internal fun ArticleHtmlContent(
     audioDetail: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
-    val document = articleDocument(
-        entry, colors.onSurface.toCssHex(), colors.primary.toCssHex(),
-        audioDetail = audioDetail
-    )
+    val textColor = colors.onSurface.toCssHex()
+    val linkColor = colors.primary.toCssHex()
+    val document = remember(entry, textColor, linkColor, audioDetail) {
+        articleDocument(entry, textColor, linkColor, audioDetail = audioDetail)
+    }
     val density = LocalDensity.current
     var contentHeightPx by remember(document, baseUrl) { mutableIntStateOf(1) }
     val viewModifier = if (fitContent) {

@@ -4,10 +4,60 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Duration
+import java.time.ZonedDateTime
 
 class RssFeedGroupingTest {
     private fun entry(title: String, categories: List<String> = emptyList(), date: String = "") =
         RssEntry(title, "<p>$title</p>", "https://example.com/$title", date, categories = categories)
+
+    @Test
+    fun preservesOriginalFeedOrderForEquidistantAndDuplicateAudioDates() {
+        val radio = entry("Radio", listOf("Radio"), "2026-09-30T12:00:00Z")
+        val later = entry("Primero", date = "2026-09-30T13:00:00Z")
+            .copy(audioUrl = "https://example.com/first.mp3")
+        val earlier = entry("Segundo", date = "2026-09-30T11:00:00Z")
+            .copy(audioUrl = "https://example.com/second.mp3")
+        val duplicate = later.copy(audioUrl = "https://example.com/duplicate.mp3")
+        val result = audioboomWithRadio(
+            RssFeed("Canaltrans", listOf(radio), RssSource.CANALTRANS.url),
+            RssFeed("Audioboom", listOf(later, duplicate, earlier), RssSource.AUDIOBOOM.url)
+        )!!
+        assertEquals(later.audioUrl, result.entries.single().audioUrl)
+    }
+
+    @Test
+    fun indexedMatchingAgreesWithExhaustiveSearchForLargeFeeds() {
+        val start = ZonedDateTime.parse("2026-09-01T00:00:00-03:00")
+        val radioEntries = (0 until 500).map { index ->
+            val date = start.plusMinutes(index * 41L)
+                .withZoneSameInstant(java.time.ZoneOffset.ofHours(if (index % 2 == 0) -3 else -4))
+            entry("Radio $index", listOf("Radio"), date.toString())
+        }
+        val audioEntries = (0 until 1000).reversed().map { index ->
+            entry("Audio $index", date = start.plusMinutes(index * 23L).toString())
+                .copy(audioUrl = "https://example.com/$index.mp3")
+        }
+        val result = audioboomWithRadio(
+            RssFeed("Canaltrans", radioEntries, RssSource.CANALTRANS.url),
+            RssFeed("Audioboom", audioEntries, RssSource.AUDIOBOOM.url)
+        )!!
+        val parsedAudio = audioEntries.map { ZonedDateTime.parse(it.date) to it }
+        val expected = radioEntries.associate { radio ->
+            val date = ZonedDateTime.parse(radio.date)
+            radio.title to parsedAudio.filter { (published, _) ->
+                published.withZoneSameInstant(date.zone).toLocalDate() == date.toLocalDate()
+            }.minByOrNull { (published, _) ->
+                Duration.between(date.toInstant(), published.toInstant()).abs()
+            }?.second?.audioUrl.orEmpty()
+        }
+        assertEquals(expected, result.entries.associate { it.title to it.audioUrl })
+        assertEquals(500, result.entries.size)
+        assertEquals(
+            radioEntries.sortedByDescending { ZonedDateTime.parse(it.date).toInstant() }.map { it.title },
+            result.entries.map { it.title }
+        )
+    }
 
     @Test
     fun onlyEntriesWithRadioCategoryMoveOutOfCanaltrans() {

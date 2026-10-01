@@ -6,13 +6,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.text.Html
-import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -39,6 +39,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
@@ -70,6 +72,7 @@ import com.rama.rss.reader.RssSource
 import com.rama.rss.reader.RssViewModel
 import com.rama.rss.reader.escapeHtml
 import com.rama.rss.reader.enabledRssSources
+import com.rama.rss.reader.formatRssDate
 import com.rama.rss.reader.nextFeedPageSize
 import com.rama.rss.reader.shouldLoadNextFeedPage
 import com.rama.rss.shared.R as SharedR
@@ -111,12 +114,20 @@ internal fun RssAppContent(
     onRefresh: () -> Unit = {},
     availableSources: List<RssSource> = enabledRssSources()
 ) {
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = { FeedBottomNavigation(selectedSource, onSelectSource, availableSources) }
-    ) { innerPadding ->
-        key(selectedSource) {
-            RssReader(selectedSource, feed, loading, error, onRefresh, Modifier.padding(innerPadding))
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = { FeedBottomNavigation(selectedSource, onSelectSource, availableSources) }
+        ) { innerPadding ->
+            key(selectedSource) {
+                RssReader(selectedSource, feed, loading, error, onRefresh, Modifier.padding(innerPadding))
+            }
+        }
+        if (loading) {
+            RocketLoadingIndicator(
+                animating = true,
+                modifier = Modifier.matchParentSize()
+            )
         }
     }
 }
@@ -158,19 +169,12 @@ internal fun RssReader(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState()
 ) {
-    var selectedEntryKey by rememberSaveable { mutableStateOf<String?>(null) }
     var visibleCount by rememberSaveable(source) { mutableIntStateOf(FEED_PAGE_SIZE) }
+    var selectedEntryKey by rememberSaveable(source) { mutableStateOf<String?>(null) }
+    val refreshState = rememberPullToRefreshState()
     val entries = feed?.entries.orEmpty()
-    val selected = if (source == RssSource.AUDIOBOOM) {
-        feed?.entries?.firstOrNull { articleKey(it) == selectedEntryKey }
-    } else null
-    if (!LocalInspectionMode.current) {
-        BackHandler(enabled = selected != null) { selectedEntryKey = null }
-    }
-    if (selected != null) {
-        Article(selected, selected.baseUrl.ifBlank { feed?.baseUrl.orEmpty() }, { selectedEntryKey = null }, modifier)
-        return
-    }
+    val selectedEntry = entries.firstOrNull { articleKey(it) == selectedEntryKey }
+    BackHandler(enabled = selectedEntry != null) { selectedEntryKey = null }
     val visibleEntries = remember(entries, visibleCount) { entries.take(visibleCount) }
     LaunchedEffect(listState, entries.size, visibleCount, loading) {
         snapshotFlow {
@@ -185,6 +189,15 @@ internal fun RssReader(
             if (shouldLoad) visibleCount = nextFeedPageSize(visibleCount, entries.size)
         }
     }
+    if (selectedEntry != null && source == RssSource.AUDIOBOOM) {
+        Article(
+            selectedEntry,
+            selectedEntry.baseUrl.ifBlank { feed?.baseUrl.orEmpty() },
+            onBack = { selectedEntryKey = null },
+            modifier = modifier
+        )
+        return
+    }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         Image(
             painter = painterResource(SharedR.drawable.background),
@@ -196,7 +209,19 @@ internal fun RssReader(
         PullToRefreshBox(
             isRefreshing = loading,
             onRefresh = { visibleCount = FEED_PAGE_SIZE; onRefresh() },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            state = refreshState,
+            indicator = {
+                if (!loading && refreshState.distanceFraction > 0f) {
+                    RocketLoadingIndicator(
+                        animating = false,
+                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(120.dp)
+                            .graphicsLayer {
+                                alpha = refreshState.distanceFraction.coerceIn(0f, 1f)
+                            }
+                    )
+                }
+            }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().testTag("RssEntryList"),
@@ -208,26 +233,20 @@ internal fun RssReader(
                     item { Text(message, color = MaterialTheme.colorScheme.error) }
                 }
                 if (feed != null) {
-                    item { Text(plainText(feed.title), style = MaterialTheme.typography.titleLarge) }
+                    item {
+                        val heading = source.header
+                        val title = remember(heading) { plainText(heading) }
+                        Text(title, style = MaterialTheme.typography.titleLarge)
+                    }
                     if (feed.entries.isEmpty()) {
                         item { Text("Este feed no contiene entradas.") }
                     }
                 }
                 items(visibleEntries) { entry ->
-                    if (source == RssSource.CANALTRANS) {
-                        CanaltransArticleCard(entry, entry.baseUrl.ifBlank { feed?.baseUrl.orEmpty() })
+                    if (source == RssSource.AUDIOBOOM) {
+                        AudioboomSummaryCard(entry, onClick = { selectedEntryKey = articleKey(entry) })
                     } else {
-                        Card(modifier = Modifier.fillMaxWidth().clickable { selectedEntryKey = articleKey(entry) }) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(plainText(entry.title), style = MaterialTheme.typography.titleMedium)
-                                if (entry.date.isNotBlank()) Text(entry.date, style = MaterialTheme.typography.labelMedium)
-                                Text(
-                                    plainText(entry.html).ifBlank { "Pulsa para ver la entrada" },
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
+                        FeedArticleCard(entry, entry.baseUrl.ifBlank { feed?.baseUrl.orEmpty() })
                     }
                 }
                 if (visibleEntries.size < entries.size) {
@@ -245,16 +264,44 @@ internal fun RssReader(
     }
 }
 
+private fun articleKey(entry: RssEntry): String = "${entry.link}\u0000${entry.title}\u0000${entry.date}"
+
 @Composable
-internal fun CanaltransArticleCard(entry: RssEntry, baseUrl: String, modifier: Modifier = Modifier) {
+internal fun AudioboomSummaryCard(entry: RssEntry, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val title = remember(entry.title) { plainText(entry.title) }
+    val summary = remember(entry.html) { plainText(withoutDescriptionHeading(entry.html)) }
+    val date = remember(entry.date) { formatRssDate(entry.date) }
+    Card(onClick = onClick, modifier = modifier.fillMaxWidth().testTag("AudioboomArticleCard")) {
+        Column(
+            Modifier.fillMaxWidth().background(readerBackground()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            if (entry.date.isNotBlank()) {
+                Text(date, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (summary.isNotBlank()) {
+                Text(summary, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun FeedArticleCard(
+    entry: RssEntry,
+    baseUrl: String,
+    modifier: Modifier = Modifier,
+    audioDetail: Boolean = false
+) {
     val context = LocalContext.current
     val isPreview = LocalInspectionMode.current
-    Card(modifier.fillMaxWidth().testTag("CanaltransArticleCard")) {
+    Card(modifier.fillMaxWidth().testTag(if (audioDetail) "AudioboomArticleCard" else "CanaltransArticleCard")) {
         Column(Modifier.fillMaxWidth().background(readerBackground())) {
             if (isPreview) {
-                ArticlePreviewContent(entry, Modifier.fillMaxWidth(), scrollable = false)
+                ArticlePreviewContent(entry, Modifier.fillMaxWidth(), scrollable = false, audioDetail = audioDetail)
             } else {
-                ArticleHtmlContent(entry, baseUrl, Modifier.fillMaxWidth(), fitContent = true)
+                ArticleHtmlContent(entry, baseUrl, Modifier.fillMaxWidth(), fitContent = true, audioDetail = audioDetail)
             }
             if (entry.link.isNotBlank()) {
                 TextButton(
@@ -305,13 +352,14 @@ private fun ArticlePreviewContent(
     audioDetail: Boolean = false
 ) {
     val contentModifier = if (scrollable) modifier.verticalScroll(rememberScrollState()) else modifier
+    val date = remember(entry.date) { formatRssDate(entry.date) }
     Column(
         modifier = contentModifier.padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(entry.title, style = MaterialTheme.typography.headlineMedium)
         if (entry.date.isNotBlank()) {
-            Text(entry.date, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(date, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (audioDetail && episodeCoverUrl(entry.html, entry.baseUrl).isNotBlank()) {
             Box(Modifier.fillMaxWidth().height(200.dp).background(MaterialTheme.colorScheme.surfaceContainer)) {
@@ -342,9 +390,11 @@ private fun ArticlePreviewContent(
     }
 }
 
-private fun articleKey(entry: RssEntry): String = "${entry.baseUrl}|${entry.link}|${entry.title}|${entry.date}"
 
-private fun plainText(html: String): String = Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT).toString().trim()
+private fun plainText(html: String): String = Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT)
+    .toString()
+    .replace("\uFFFC", "")
+    .trim()
 
 internal fun openInBrowser(context: Context, address: String) {
     val uri = Uri.parse(address)
@@ -397,7 +447,7 @@ internal fun articleDocument(
       a { color: $linkColor; } .date { font-size: .85em; opacity: .7; }
     </style></head><body>
     <h1>${escapeHtml(plainText(entry.title))}</h1>
-    <p class="date">${escapeHtml(entry.date)}</p>
+    <p class="date">${escapeHtml(formatRssDate(entry.date))}</p>
     $body
     </body></html>
 """.trimIndent()

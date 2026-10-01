@@ -1,8 +1,8 @@
 package com.rama.rss.reader
 
 // Controls only menu visibility. Canaltrans still supplies information for Audioboom.
-internal const val CANALTRANS_TAB_ENABLED = false
+internal const val CANALTRANS_TAB_ENABLED = true
 
 internal fun enabledRssSources(canaltransTabEnabled: Boolean = CANALTRANS_TAB_ENABLED): List<RssSource> =
-    if (canaltransTabEnabled) listOf(RssSource.CANALTRANS, RssSource.AUDIOBOOM)
+    if (canaltransTabEnabled) listOf(RssSource.AUDIOBOOM, RssSource.CANALTRANS)
     else listOf(RssSource.AUDIOBOOM)
