@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="automotive">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-09-30T18:03:03.035172400Z">
+        <DropdownSelection timestamp="2026-10-28T17:33:03.853533900Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=R5CRA24K8BX" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\rmarquez\.android\avd\Automotive_1408p_landscape_with_Google_Play.avd" />
             </handle>
           </Target>
         </DropdownSelection>
@@ -28,10 +28,10 @@
       </SelectionState>
       <SelectionState runConfigName="mobile">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-09-30T18:03:03.035172400Z">
+        <DropdownSelection timestamp="2026-10-28T20:33:47.587815800Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=R5CRA24K8BX" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=R5CW22JRZ4T" />
             </handle>
           </Target>
         </DropdownSelection>
@@ -44,7 +44,7 @@
             </Target>
             <Target type="DEFAULT_BOOT">
               <handle>
-                <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\rmarquez\.android\avd\Handheld.avd" />
+                <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\rmarquez\.android\avd\Active_3.avd" />
               </handle>
             </Target>
           </targets>

@@ -8,23 +8,15 @@
             <MultiDisplayState>
               <option name="displayDescriptors">
                 <list>
-                  <DisplayDescriptor>
-                    <option name="height" value="792" />
-                    <option name="width" value="1408" />
-                  </DisplayDescriptor>
-                  <DisplayDescriptor>
-                    <option name="displayId" value="6" />
-                    <option name="height" value="792" />
-                    <option name="width" value="528" />
-                  </DisplayDescriptor>
+                  <display size="1408x792" />
+                  <display displayId="6" size="528x792" />
                 </list>
               </option>
               <option name="panelState">
                 <PanelState>
                   <option name="splitPanel">
                     <SplitPanelState>
-                      <option name="proportion" value="0.39910978078842163" />
-                      <option name="splitType" value="VERTICAL" />
+                      <option name="proportion" value="0.7272727489471436" />
                       <option name="firstComponent">
                         <PanelState>
                           <option name="displayId" value="0" />
