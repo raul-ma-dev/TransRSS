@@ -1,6 +1,6 @@
 package com.rama.rss.reader
 
-internal const val FEED_PAGE_SIZE = 5
+internal const val FEED_PAGE_SIZE = 20
 
 internal fun nextFeedPageSize(current: Int, total: Int): Int =
     (current.toLong() + FEED_PAGE_SIZE).coerceAtMost(total.coerceAtLeast(0).toLong()).toInt()

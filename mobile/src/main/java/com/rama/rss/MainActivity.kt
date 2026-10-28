@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.text.Html
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -38,6 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -62,6 +64,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -75,8 +78,10 @@ import com.rama.rss.reader.enabledRssSources
 import com.rama.rss.reader.formatRssDate
 import com.rama.rss.reader.nextFeedPageSize
 import com.rama.rss.reader.shouldLoadNextFeedPage
+import com.rama.rss.playback.EpisodeAudioPlayer
 import com.rama.rss.shared.R as SharedR
 import com.rama.rss.ui.theme.RssTheme
+import java.net.MalformedURLException
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -299,7 +304,7 @@ internal fun FeedArticleCard(
     Card(modifier.fillMaxWidth().testTag(if (audioDetail) "AudioboomArticleCard" else "CanaltransArticleCard")) {
         Column(Modifier.fillMaxWidth().background(readerBackground())) {
             if (isPreview) {
-                ArticlePreviewContent(entry, Modifier.fillMaxWidth(), scrollable = false, audioDetail = audioDetail)
+                ArticlePreviewContent(entry, Modifier.fillMaxWidth(), scrollable = false, audioDetail = audioDetail, compactCard = !audioDetail)
             } else {
                 ArticleHtmlContent(entry, baseUrl, Modifier.fillMaxWidth(), fitContent = true, audioDetail = audioDetail)
             }
@@ -307,7 +312,7 @@ internal fun FeedArticleCard(
                 TextButton(
                     onClick = { if (!isPreview) openInBrowser(context, entry.link) },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                ) { Text("Abrir original") }
+                ) { Text("Ver en CanalTrans") }
             }
         }
     }
@@ -333,23 +338,74 @@ internal fun Article(entry: RssEntry, baseUrl: String, onBack: () -> Unit, modif
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onBack) { Text("Volver") }
             if (entry.link.isNotBlank()) {
-                TextButton(onClick = { if (!isPreview) openInBrowser(context, entry.link) }) { Text("Abrir original") }
+                TextButton(onClick = { if (!isPreview) openInBrowser(context, entry.link) }) { Text("Ver en CanalTrans") }
             }
         }
         if (isPreview) {
             ArticlePreviewContent(entry, Modifier.fillMaxWidth().weight(1f), audioDetail = true)
             return@Column
         }
-        ArticleHtmlContent(entry, baseUrl, Modifier.fillMaxWidth().weight(1f), audioDetail = true)
+        val audio = remember(entry, baseUrl) {
+            val result = try {
+                Result.success(episodeAudioUrl(entry, baseUrl))
+            } catch (error: MalformedURLException) {
+                Result.failure(error)
+            } catch (error: IllegalArgumentException) {
+                Result.failure(error)
+            }
+            result.onFailure {
+                Log.e("EpisodePlayback", "Invalid episode audio source", it)
+            }
+        }
+        val audioUrl = audio.getOrNull().orEmpty()
+        if (audio.isFailure) {
+            Text(
+                stringResource(R.string.playback_invalid_url),
+                modifier = Modifier.padding(16.dp),
+                color = MaterialTheme.colorScheme.error
+            )
+        } else if (audioUrl.isNotBlank()) {
+            val (before, after) = remember(entry.html) {
+                splitAfterFirstImage(withoutAudioPlayers(withoutDescriptionHeading(entry.html)))
+            }
+            Column(
+                Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                    .testTag("EpisodeDetailContent")
+            ) {
+                ArticleHtmlContent(
+                    entry.copy(html = before), baseUrl,
+                    Modifier.fillMaxWidth().testTag("EpisodeContentBeforePlayer"),
+                    fitContent = true, audioDetail = true, nativeAudio = true
+                )
+                EpisodeAudioPlayer(
+                    entry, audioUrl,
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("EpisodeAudioPlayer")
+                )
+                if (after.isNotBlank()) {
+                    ArticleHtmlContent(
+                        entry.copy(html = after), baseUrl,
+                        Modifier.fillMaxWidth().testTag("EpisodeContentAfterPlayer"),
+                        fitContent = true, audioDetail = true, nativeAudio = true, includeHeader = false
+                    )
+                }
+            }
+            return@Column
+        }
+        ArticleHtmlContent(
+            entry, baseUrl, Modifier.fillMaxWidth().weight(1f),
+            audioDetail = true, nativeAudio = true
+        )
     }
 }
 
 @Composable
-private fun ArticlePreviewContent(
+internal fun ArticlePreviewContent(
     entry: RssEntry,
     modifier: Modifier,
     scrollable: Boolean = true,
-    audioDetail: Boolean = false
+    audioDetail: Boolean = false,
+    compactCard: Boolean = false,
+    includeHeader: Boolean = true
 ) {
     val contentModifier = if (scrollable) modifier.verticalScroll(rememberScrollState()) else modifier
     val date = remember(entry.date) { formatRssDate(entry.date) }
@@ -357,9 +413,15 @@ private fun ArticlePreviewContent(
         modifier = contentModifier.padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(entry.title, style = MaterialTheme.typography.headlineMedium)
-        if (entry.date.isNotBlank()) {
-            Text(date, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (includeHeader) {
+            Text(entry.title, style = if (compactCard) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineMedium)
+            if (entry.date.isNotBlank()) {
+                Text(
+                    date,
+                    style = if (compactCard) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         if (audioDetail && episodeCoverUrl(entry.html, entry.baseUrl).isNotBlank()) {
             Box(Modifier.fillMaxWidth().height(200.dp).background(MaterialTheme.colorScheme.surfaceContainer)) {
@@ -380,10 +442,10 @@ private fun ArticlePreviewContent(
         }
         Text(
             plainText(if (audioDetail) withoutDescriptionHeading(entry.html) else entry.html),
-            style = MaterialTheme.typography.bodyLarge
+            style = if (compactCard) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
         )
         Text(
-            "Vista previa estática. En la app, el contenido HTML y el audio se muestran en WebView.",
+            "Vista previa estática. En la app, el HTML se muestra en WebView y los episodios usan un reproductor nativo.",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -412,29 +474,46 @@ internal fun articleDocument(
     entry: RssEntry,
     textColor: String = "#E5E7EB",
     linkColor: String = "#FF8A91",
-    audioDetail: Boolean = false
+    audioDetail: Boolean = false,
+    cardTypography: Typography? = null,
+    nativeAudio: Boolean = false,
+    includeHeader: Boolean = true
 ): String {
-    val description = if (audioDetail) withoutDescriptionHeading(entry.html) else entry.html
+    val articleHtml = if (nativeAudio) withoutAudioPlayers(entry.html) else entry.html
+    val description = if (audioDetail) withoutDescriptionHeading(articleHtml) else articleHtml
     val hasEmbeddedAudio = Regex("<audio\\b", RegexOption.IGNORE_CASE).containsMatchIn(description)
-    val player = if (entry.audioUrl.isNotBlank() && !hasEmbeddedAudio) {
+    val player = if (!nativeAudio && entry.audioUrl.isNotBlank() && !hasEmbeddedAudio) {
         """<audio controls="controls" preload="none" src="${escapeHtml(entry.audioUrl)}" aria-label="Reproducir episodio">Tu dispositivo no puede reproducir este audio.</audio>"""
     } else ""
     val content = description.ifBlank {
         if (player.isNotBlank()) "<p>Esta entrada incluye un episodio de audio.</p>"
-        else "<p>El feed no incluye contenido. Usa «Abrir original» para visitar el artículo.</p>"
+        else "<p>El feed no incluye contenido. Usa «Ver en CanalTrans» para visitar el artículo.</p>"
     }
     val body = if (audioDetail) playerAfterFirstImage(content, player) else "$player\n$content"
+    val cardStyles = cardTypography?.let { typography ->
+        """
+        body { font-size: ${typography.bodyMedium.fontSize.value}px; line-height: ${typography.bodyMedium.lineHeight.value}px; }
+        h1, h2, h3, h4, h5, h6 { font-size: ${typography.titleMedium.fontSize.value}px; line-height: ${typography.titleMedium.lineHeight.value}px; font-weight: ${typography.titleMedium.fontWeight?.weight ?: 500}; }
+        .date { font-size: ${typography.labelMedium.fontSize.value}px; line-height: ${typography.labelMedium.lineHeight.value}px; font-weight: ${typography.labelMedium.fontWeight?.weight ?: 500}; }
+        """.trimIndent()
+    }.orEmpty()
+    val header = if (includeHeader) {
+        """
+        <h1>${escapeHtml(plainText(entry.title))}</h1>
+        <p class="date">${escapeHtml(formatRssDate(entry.date))}</p>
+        """.trimIndent()
+    } else ""
     return """
     <!doctype html>
     <html lang="es"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; media-src https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; media-src https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
     <style>
       :root { color-scheme: dark; }
       html, body { background: transparent; }
-      body { font: 18px/1.6 sans-serif; margin: 20px; overflow-wrap: anywhere; color: $textColor; }
+      body { font: 18px/1.6 sans-serif; margin: 0; padding: 20px; overflow-wrap: anywhere; color: $textColor; }
       h1 { font-size: 1.6em; line-height: 1.3; } img, video { max-width: 100%; height: auto; }
       img.episode-cover { display: block; width: 100%; height: auto; border-radius: 12px; }
       audio { display: block; width: 100%; margin: 20px 0; accent-color: $linkColor; }
@@ -445,9 +524,9 @@ internal fun articleDocument(
       table { display: block; overflow-x: auto; } th, td { border-bottom: 1px solid #51363B; padding: 8px; }
       hr { border: 0; border-top: 1px solid #51363B; }
       a { color: $linkColor; } .date { font-size: .85em; opacity: .7; }
+      $cardStyles
     </style></head><body>
-    <h1>${escapeHtml(plainText(entry.title))}</h1>
-    <p class="date">${escapeHtml(formatRssDate(entry.date))}</p>
+    $header
     $body
     </body></html>
 """.trimIndent()

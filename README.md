@@ -25,7 +25,7 @@ Los identificadores internos conservan los nombres de las fuentes, aunque el men
 
 ### Noticias
 
-Muestra las entradas de CanalTrans que **no** tienen la categoría `Radio`. Cada tarjeta contiene el HTML completo y, cuando existe un enlace, el botón **Abrir original**. No necesita abrir una pantalla de detalle.
+Muestra las entradas de CanalTrans que **no** tienen la categoría `Radio`. Cada tarjeta contiene el HTML completo y, cuando existe un enlace, el botón **Ver en CanalTrans**. No necesita abrir una pantalla de detalle.
 
 ### Episodios
 
@@ -47,14 +47,17 @@ La conversión a GMT−3 afecta **solo a la presentación**. No cambia las fecha
 
 ## Reproducción de audio
 
-El audio se reproduce con un elemento HTML `<audio controls>` dentro de WebView:
+En el detalle de **Episodios**, el audio se reproduce con un reproductor nativo de **Media3 / ExoPlayer**, conectado a `EpisodePlaybackService`:
 
 - No se reproduce automáticamente: requiere una acción del usuario.
-- Usa `preload="none"` y recursos de audio HTTPS.
-- Cuando el HTML no contiene un reproductor, se genera a partir de la URL de audio asociada.
-- En el detalle de episodios, el reproductor generado se coloca después de la primera imagen; si no hay imagen, al final del contenido.
+- Continúa al cambiar de aplicación, volver a la lista o apagar/bloquear la pantalla.
+- El servicio en primer plano publica una notificación multimedia con el título y controles para reproducir, pausar y **Detener**. Pausar conserva la posición; detener vacía el reproductor y retira la notificación.
+- El detalle coloca los controles nativos justo debajo de la primera imagen, con barra de posición y duración; si no hay imagen, los coloca al final del contenido. Todo el detalle comparte el mismo desplazamiento. Volver a abrir el episodio se conecta al mismo reproductor sin reiniciarlo.
+- Usa el audio asociado del feed; si no existe, admite el `src` de un `<audio>` o de su `<source>` en la descripción. Las direcciones HTTP antiguas se solicitan por HTTPS.
+- Los reproductores HTML del detalle se eliminan para evitar audio duplicado; el texto y las imágenes se conservan.
+- Gestiona el foco de audio y pausa al desconectar los auriculares. El reproductor pertenece al servicio, no al ciclo de vida de la actividad.
 
-Este reproductor **no está conectado a un servicio nativo de reproducción**. No se implementan reproducción garantizada en segundo plano, descarga de episodios ni controles de audio integrados con Android Auto.
+Los audios incrustados en **Noticias** siguen usando WebView, sin reproducción garantizada en segundo plano. No se implementan descarga de episodios, restauración tras forzar el cierre/reiniciar el teléfono ni un catálogo de reproducción para Android Auto. La notificación de sesión multimedia no requiere solicitar el permiso de notificaciones de Android 13.
 
 ## Estructura del proyecto
 
@@ -70,7 +73,7 @@ Este reproductor **no está conectado a un servicio nativo de reproducción**. N
 
 ### Estado de los módulos
 
-- **`mobile`**: contiene el lector, la navegación, el procesamiento de feeds, las tarjetas, el detalle HTML y el loading animado.
+- **`mobile`**: contiene el lector, la navegación, el procesamiento de feeds, las tarjetas, el detalle HTML, el servicio de audio nativo y el loading animado.
 - **`automotive`**: incluye una actividad Compose básica que muestra el nombre de la aplicación. Todavía no incorpora la interfaz ni el lector RSS de `mobile`.
 - **`shared`**: contiene recursos compartidos y `MyMusicService`, una base de `MediaBrowserServiceCompat` con `MediaSessionCompat`. Su catálogo está vacío y sus callbacks de reproducción aún no tienen implementación.
 
@@ -164,7 +167,7 @@ Ocultar Noticias en el menú **no elimina la dependencia de CanalTrans**: sus en
 - La preparación y combinación de feeds se realiza en `Dispatchers.Default`, fuera del hilo de UI.
 - Los audios se indexan por día y zona horaria; se utiliza búsqueda binaria para encontrar el más cercano.
 - La lista usa `LazyColumn` y paginación local. Se mantienen datos preparados en memoria y se reutilizan conversiones de HTML durante la composición.
-- `ArticleHtmlContent` integra WebView con Compose; las tarjetas de Noticias ajustan su altura al contenido HTML.
+- `ArticleHtmlContent` integra WebView con Compose; las tarjetas de Noticias usan `WRAP_CONTENT` para adoptar automáticamente el alto del HTML mediante la medición nativa de Android, sin calcular ni guardar alturas en Compose. El dibujo se recorta a los límites de cada tarjeta y el documento usa espacio interior en lugar de márgenes del `body`.
 - Las partículas se actualizan con el reloj de fotogramas de Compose y se dibujan en Canvas, sin recomponer todo el cohete en cada fotograma. Su cantidad está limitada.
 
 **La paginación limita el renderizado, no las descargas.** Cada actualización descarga los feeds completos, dentro del límite de tamaño permitido. No hay caché persistente de feeds ni lectura sin conexión implementada.
@@ -177,6 +180,7 @@ Ocultar Noticias en el menú **no elimina la dependencia de CanalTrans**: sus en
 - JavaScript, acceso a archivos y acceso a contenido local deshabilitados en WebView.
 - Contenido mixto bloqueado y política CSP para restringir los recursos del documento HTML.
 - Imágenes permitidas mediante HTTPS y `data:`; audio mediante HTTPS.
+- La política CSP actualiza las solicitudes HTTP del HTML a HTTPS para mostrar imágenes de artículos antiguos sin permitir contenido inseguro. Si el servidor no ofrece el recurso mediante HTTPS, su carga permanece bloqueada.
 - Enlaces originales HTTP/HTTPS abiertos fuera de la app.
 
 Estas restricciones no equivalen a una implementación general de sanitización de HTML; la app muestra las descripciones proporcionadas por las fuentes configuradas.
@@ -217,8 +221,7 @@ Los informes unitarios se generan en `mobile/build/reports/tests/`; los informes
 
 - Algunas pruebas de UI con Espresso 3.5.1 han fallado en el emulador utilizado por una incompatibilidad con `android.hardware.input.InputManager.getInstance`.
 - La prueba instrumentada de repetición/reinicio del loading ha presentado timeouts; su estabilización sigue pendiente.
-- Los previews representan contenido estático: no reproducen audio ni ejecutan la secuencia animada completa del loading. Hay un preview específico de las partículas con una muestra estática.
+- Las pantallas y componentes visuales de Compose tienen previews: inicio y sus estados, lectores, navegación, tarjetas, detalle, contenido HTML estático, reproductor, indicador de carga y componentes del cohete. `RssPreviews.kt` agrupa los del lector; los componentes independientes tienen su preview en su propio archivo. Automotive conserva su preview de pantalla.
+- Los previews usan datos locales y contenido estático: no crean WebViews, descargan feeds ni se conectan al servicio de audio. El reproductor muestra una posición y duración de ejemplo. No ejecutan la secuencia animada completa del loading; las partículas tienen una muestra estática.
 
 Compilar el APK de pruebas no implica que todas las pruebas instrumentadas hayan pasado. Estas limitaciones deben tenerse en cuenta al validar cambios en el entorno local.
-
-

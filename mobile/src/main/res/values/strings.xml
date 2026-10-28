@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">TransRSS</string>
+    <string name="playback_title">Reproductor de audio</string>
+    <string name="playback_play">Reproducir</string>
+    <string name="playback_pause">Pausar</string>
+    <string name="playback_stop">Detener</string>
+    <string name="playback_connecting">Conectando con el reproductor…</string>
+    <string name="playback_buffering">Cargando audio…</string>
+    <string name="playback_connection_error">No se pudo conectar con el reproductor.</string>
+    <string name="playback_error">No se pudo reproducir el audio. Comprueba tu conexión e inténtalo de nuevo.</string>
+    <string name="playback_invalid_url">El episodio no incluye una dirección de audio HTTPS válida.</string>
+    <string name="playback_progress">Posición del audio</string>
 </resources>

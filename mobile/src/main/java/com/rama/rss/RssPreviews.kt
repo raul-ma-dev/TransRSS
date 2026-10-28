@@ -55,7 +55,7 @@ private fun PreviewTheme(content: @Composable () -> Unit) {
     }
 }
 
-@Preview(name = "Inicio · Canaltrans (pestaña oculta)", group = "RSS", showBackground = true, widthDp = 360, heightDp = 800)
+@Preview(name = "Inicio · Noticias", group = "RSS", showBackground = true, widthDp = 360, heightDp = 800)
 @Composable
 private fun CanaltransHomePreview() {
     PreviewTheme {
@@ -63,7 +63,7 @@ private fun CanaltransHomePreview() {
     }
 }
 
-@Preview(name = "Inicio · Audioboom", group = "RSS", showBackground = true, widthDp = 360, heightDp = 800)
+@Preview(name = "Inicio · Episodios", group = "RSS", showBackground = true, widthDp = 360, heightDp = 800)
 @Composable
 private fun AudioboomHomePreview() {
     PreviewTheme { RssAppContent(RssSource.AUDIOBOOM, SampleAudioboomFeed) }
@@ -99,13 +99,13 @@ private fun BottomNavigationPreview() {
     PreviewTheme { FeedBottomNavigation(RssSource.AUDIOBOOM) }
 }
 
-@Preview(name = "Tarjeta completa · Canaltrans (pestaña oculta)", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 560)
+@Preview(name = "Tarjeta completa · Noticias", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 560)
 @Composable
 private fun CanaltransCardPreview() {
     PreviewTheme { FeedArticleCard(SampleArticle, RssSource.CANALTRANS.url, Modifier.padding(16.dp)) }
 }
 
-@Preview(name = "Tarjeta · Audioboom", group = "Artículos", showBackground = true, widthDp = 360)
+@Preview(name = "Tarjeta · Episodios", group = "Artículos", showBackground = true, widthDp = 360)
 @Composable
 private fun AudioboomCardPreview() {
     PreviewTheme {
@@ -113,8 +113,32 @@ private fun AudioboomCardPreview() {
     }
 }
 
-@Preview(name = "Detalle · Audioboom", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 760)
+@Preview(name = "Detalle · Episodios", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 760)
 @Composable
 private fun AudioArticlePreview() {
     PreviewTheme { Article(SampleCombinedEpisode, RssSource.CANALTRANS.url, onBack = {}) }
+}
+
+@Preview(name = "Lector · Noticias", group = "RSS", showBackground = true, widthDp = 360, heightDp = 700)
+@Composable
+private fun NewsReaderPreview() {
+    PreviewTheme {
+        RssReader(RssSource.CANALTRANS, SampleCanaltransFeed, loading = false, error = null, onRefresh = {})
+    }
+}
+
+@Preview(name = "Lector · Episodios", group = "RSS", showBackground = true, widthDp = 360, heightDp = 700)
+@Composable
+private fun EpisodesReaderPreview() {
+    PreviewTheme {
+        RssReader(RssSource.AUDIOBOOM, SampleAudioboomFeed, loading = false, error = null, onRefresh = {})
+    }
+}
+
+@Preview(name = "Contenido estático", group = "Artículos", showBackground = true, widthDp = 360, heightDp = 440)
+@Composable
+private fun StaticArticleContentPreview() {
+    PreviewTheme {
+        ArticlePreviewContent(SampleArticle, Modifier, scrollable = false, compactCard = true)
+    }
 }

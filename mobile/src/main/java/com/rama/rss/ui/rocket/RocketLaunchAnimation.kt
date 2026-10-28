@@ -31,11 +31,22 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.zIndex
 import com.rama.rss.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+@Preview(name = "Cohete en reposo", group = "Cohete", showBackground = true, backgroundColor = 0xFF181113, widthDp = 360, heightDp = 360)
+@Composable
+private fun RocketLaunchAnimationPreview() {
+    RocketLaunchAnimation(
+        state = RocketLaunchState.IDLE,
+        onIgnitionFinished = {},
+        onLaunchFinished = {}
+    )
+}
 
 @Composable
 fun RocketLaunchAnimation(

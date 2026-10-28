@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -19,8 +20,18 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rama.rss.ui.theme.RssTheme
 import kotlinx.coroutines.delay
+
+@Preview(name = "Pantalla de lanzamiento", group = "Cohete", showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+private fun RocketLaunchScreenPreview() {
+    RssTheme(darkTheme = true, dynamicColor = false) {
+        RocketLaunchScreen(viewModel = remember { RocketLaunchViewModel() })
+    }
+}
 
 @Composable
 fun RocketLaunchScreen(

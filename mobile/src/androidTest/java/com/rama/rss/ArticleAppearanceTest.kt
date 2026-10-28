@@ -1,9 +1,11 @@
 package com.rama.rss
 
 import android.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.ColorUtils
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.rama.rss.reader.RssEntry
+import com.rama.rss.ui.theme.Typography
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,6 +15,25 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ArticleAppearanceTest {
     private val entry = RssEntry("Noticia", "<p>Contenido</p>", "", "30/09/2026")
+
+    @Test
+    fun newsCardUsesEpisodeCardTypographyWithoutChangingDetails() {
+        val card = articleDocument(entry, cardTypography = Typography)
+        assertTrue(card.contains("body { font-size: 14.0px; line-height: 20.0px; }"))
+        assertTrue(card.contains("font-size: 16.0px; line-height: 24.0px; font-weight: 500;"))
+        assertTrue(card.contains(".date { font-size: 12.0px; line-height: 16.0px; font-weight: 500; }"))
+        assertTrue(card.contains(entry.html))
+        val detail = articleDocument(entry, audioDetail = true)
+        assertTrue(detail.contains("body { font: 18px/1.6 sans-serif;"))
+        assertFalse(detail.contains("body { font-size: 14.0px;"))
+    }
+
+    @Test
+    fun newsCardTypographyFollowsThemeSizes() {
+        val theme = Typography.copy(bodyMedium = Typography.bodyMedium.copy(fontSize = 17.sp, lineHeight = 25.sp))
+        val document = articleDocument(entry, cardTypography = theme)
+        assertTrue(document.contains("body { font-size: 17.0px; line-height: 25.0px; }"))
+    }
 
     @Test
     fun allArticlesDisplayPublicationDateInGmtMinusThree() {
@@ -62,6 +83,68 @@ class ArticleAppearanceTest {
         assertTrue(document.contains("default-src 'none';"))
         assertFalse(document.contains("media-src *"))
         assertTrue(document.contains("audio { display: block; width: 100%;"))
+    }
+
+    @Test
+    fun articleUpgradesLegacyImageRequestsWithoutAllowingInsecureContent() {
+        val html = """<p align="center"><img src="http://www.canaltrans.com/images/a20/ed_pirata_600.jpg"></p>"""
+        val document = articleDocument(entry.copy(html = html))
+        assertTrue(document.contains(html))
+        assertTrue(document.contains("upgrade-insecure-requests"))
+        assertTrue(document.contains("img-src https: data:;"))
+        assertTrue(document.contains("media-src https:;"))
+        assertTrue(document.contains("default-src 'none';"))
+        assertFalse(document.contains("img-src http:"))
+    }
+
+    @Test
+    fun nativeAudioDetailRetainsContentWithoutDuplicatingTheHtmlPlayer() {
+        val episode = entry.copy(
+            html = """<img src="https://example.com/cover.jpg"><audio controls src="https://example.com/embedded.mp3"><source src="https://example.com/fallback.mp3">Audio</audio><p>Descripción completa</p>""",
+            audioUrl = "https://example.com/enclosure.mp3"
+        )
+        val document = articleDocument(episode, audioDetail = true, nativeAudio = true)
+        assertTrue(document.contains("""<img src="https://example.com/cover.jpg">"""))
+        assertTrue(document.contains("<p>Descripción completa</p>"))
+        assertFalse(document.contains("<audio"))
+        assertFalse(document.contains("<source"))
+        assertTrue(articleDocument(episode).contains("<audio"))
+    }
+
+    @Test
+    fun nativePlayerSplitsAfterFirstImageWithoutLosingOrRepeatingContent() {
+        val image = """<img src="/cover.jpg" title="Portada > episodio">"""
+        val html = """<p>Introducción</p><p align="center">$image</p><p>Descripción completa</p><img src="/second.jpg">"""
+        val (before, after) = splitAfterFirstImage(html)
+        assertEquals(html, before + after)
+        assertTrue(before.endsWith(image))
+        assertFalse(before.contains("Descripción completa"))
+        assertTrue(after.contains("Descripción completa"))
+        assertTrue(after.contains("/second.jpg"))
+        val continuation = articleDocument(entry.copy(html = after), audioDetail = true, nativeAudio = true, includeHeader = false)
+        assertTrue(continuation.contains("Descripción completa"))
+        assertFalse(continuation.contains("<h1>Noticia</h1>"))
+        assertFalse(continuation.contains("""<p class="date">"""))
+        assertEquals("<p>Sin imagen</p>" to "", splitAfterFirstImage("<p>Sin imagen</p>"))
+    }
+
+    @Test
+    fun nativeEpisodeAudioResolvesEnclosuresAndEmbeddedSourcesSecurely() {
+        assertEquals("https://example.com/episode.mp3", episodeAudioUrl(entry.copy(audioUrl = "/episode.mp3"), "https://example.com/feed.xml"))
+        assertEquals(
+            "https://example.com/embedded.mp3?a=1&b=2",
+            episodeAudioUrl(entry.copy(html = """<audio controls><source src="/embedded.mp3?a=1&amp;b=2"></audio>"""), "https://example.com/feed.xml")
+        )
+        assertEquals(
+            "https://example.com/legacy.mp3",
+            episodeAudioUrl(entry.copy(html = """<audio controls src='http://example.com/legacy.mp3'></audio>"""), "")
+        )
+        assertEquals("", episodeAudioUrl(entry, "https://example.com/feed.xml"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun nativeEpisodeAudioRejectsLocalFiles() {
+        episodeAudioUrl(entry.copy(audioUrl = "file:///private/episode.mp3"), "https://example.com/feed.xml")
     }
 
     @Test
