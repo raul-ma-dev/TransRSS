@@ -71,7 +71,7 @@ private fun safeImageUrl(source: String, baseUrl: String): String {
     if (address.startsWith("data:image/", ignoreCase = true)) return address
     return runCatching {
         val url = if (baseUrl.isBlank()) URL(address) else URL(URL(baseUrl), address)
-        url.takeIf { it.protocol == "https" && it.host.isNotBlank() && it.userInfo == null }
-            ?.toString().orEmpty()
+        url.takeIf { it.protocol in listOf("https", "http") && it.host.isNotBlank() && it.userInfo == null }
+            ?.toString()?.replaceFirst(Regex("^http:", RegexOption.IGNORE_CASE), "https:").orEmpty()
     }.getOrDefault("")
 }

@@ -17,6 +17,18 @@ class ArticleAppearanceTest {
     private val entry = RssEntry("Noticia", "<p>Contenido</p>", "", "30/09/2026")
 
     @Test
+    fun episodeCoverResolvesTheSameLegacyAndRelativeImageAsTheDetail() {
+        val legacy = """<p align="center"><img src="http://www.canaltrans.com/cover.jpg"></p><img src="https://example.com/other.jpg">"""
+        assertEquals("https://www.canaltrans.com/cover.jpg", episodeCoverUrl(legacy, "https://canaltrans.com/feed.xml"))
+        assertEquals(
+            "https://example.com/images/cover.jpg?a=1&b=2",
+            episodeCoverUrl("""<img src="/images/cover.jpg?a=1&amp;b=2">""", "https://example.com/feed.xml")
+        )
+        assertEquals("", episodeCoverUrl("<p>Sin imagen</p>", "https://example.com/feed.xml"))
+        assertEquals("", episodeCoverUrl("""<img src="file:///private/cover.jpg">""", "https://example.com/feed.xml"))
+    }
+
+    @Test
     fun newsCardUsesEpisodeCardTypographyWithoutChangingDetails() {
         val card = articleDocument(entry, cardTypography = Typography)
         assertTrue(card.contains("body { font-size: 14.0px; line-height: 20.0px; }"))

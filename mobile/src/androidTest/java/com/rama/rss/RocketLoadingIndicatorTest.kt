@@ -99,4 +99,3 @@ class RocketLoadingIndicatorTest {
         return null
     }
 }
-

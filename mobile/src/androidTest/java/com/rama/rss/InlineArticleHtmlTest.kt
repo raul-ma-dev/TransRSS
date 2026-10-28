@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -19,6 +20,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getAllSemanticsNodes
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
@@ -39,6 +44,78 @@ import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class InlineArticleHtmlTest {
+    @Test
+    fun longEpisodeDetailCanScrollToTheBottomAndBackRepeatedly() {
+        val entry = RssEntry(
+            "Episodio extenso",
+            "<p>Introducción</p><img src=\"data:image/png;base64," +
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0ioAAAAASUVORK5CYII=\">" +
+                (1..160).joinToString("") { "<p>Párrafo $it con la descripción completa del episodio.</p>" } +
+                """<div style="background:#ff00ff;height:80px">Fin de la descripción</div>""",
+            "", "", audioUrl = "https://example.com/episode.mp3"
+        )
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                activity.setContent {
+                    RssTheme(darkTheme = true, dynamicColor = false) {
+                        Article(entry, "https://example.com/feed.xml", onBack = {})
+                    }
+                }
+            }
+            awaitStableHeights(scenario, minimumCards = 2)
+            scenario.onActivity { activity ->
+                findWebViews(activity.window.decorView).forEach {
+                    assertEquals(View.LAYER_TYPE_NONE, it.layerType)
+                    assertFalse(it.settings.javaScriptEnabled)
+                }
+            }
+            repeat(5) {
+                for (toBottom in listOf(true, false)) {
+                    scenario.onActivity { activity ->
+                        val root = requireNotNull(findComposeRoot(activity.window.decorView))
+                        val scroll = root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false).single {
+                            it.config.getOrElse(SemanticsProperties.TestTag) { "" } == "EpisodeDetailContent"
+                        }
+                        val range = scroll.config[SemanticsProperties.VerticalScrollAxisRange]
+                        assertTrue("La descripción debe superar el alto de la pantalla", range.maxValue() > 0f)
+                        val distance = if (toBottom) range.maxValue() else -range.maxValue()
+                        assertTrue(requireNotNull(scroll.config[SemanticsActions.ScrollBy].action)(0f, distance))
+                    }
+                    SystemClock.sleep(500)
+                    scenario.onActivity { activity ->
+                        val root = requireNotNull(findComposeRoot(activity.window.decorView))
+                        val scroll = root.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false).single {
+                            it.config.getOrElse(SemanticsProperties.TestTag) { "" } == "EpisodeDetailContent"
+                        }
+                        val range = scroll.config[SemanticsProperties.VerticalScrollAxisRange]
+                        assertEquals(if (toBottom) range.maxValue() else 0f, range.value(), 1f)
+                    }
+                    val screenshot = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                    try {
+                        if (toBottom) {
+                            val pixels = IntArray(screenshot.width * screenshot.height)
+                            screenshot.getPixels(pixels, 0, screenshot.width, 0, 0, screenshot.width, screenshot.height)
+                            assertTrue("El final del HTML debe seguir visible tras desplazarse", pixels.count { it == Color.MAGENTA } > 1_000)
+                        }
+                    } finally {
+                        screenshot.recycle()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun findComposeRoot(view: View): ViewRootForTest? {
+        if (view is ViewRootForTest) return view
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                findComposeRoot(view.getChildAt(index))?.let { return it }
+            }
+        }
+        return null
+    }
+
     @Test
     fun inlineHtmlExpandsToFullContentWithoutEnablingScripts() {
         val entry = RssEntry(
@@ -214,6 +291,7 @@ class InlineArticleHtmlTest {
     private fun assertExpandedInlineContent(entry: RssEntry, fontScale: Float = 1f, minimumContentHeight: Int = 500) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
+                activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 activity.setContent {
                     RssTheme(darkTheme = true, dynamicColor = false) {
                         val density = LocalDensity.current.density
@@ -240,6 +318,7 @@ class InlineArticleHtmlTest {
                         assertFalse(view.isVerticalScrollBarEnabled)
                         assertEquals((fontScale * 100).toInt(), view.settings.textZoom)
                         assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, view.layoutParams.height)
+                        assertEquals(View.LAYER_TYPE_NONE, view.layerType)
                         val document = (view.tag as Pair<*, *>).first as String
                         assertTrue(document.contains("body { font-size: 14.0px; line-height: 20.0px; }"))
                         assertTrue(document.contains(entry.html))
@@ -273,11 +352,13 @@ class InlineArticleHtmlTest {
     private fun awaitStableHeights(scenario: ActivityScenario<MainActivity>, minimumCards: Int = 1): Map<String, Int> {
         var previous = emptyMap<String, Int>()
         var stableSamples = 0
+        var measurements = emptyList<String>()
         val deadline = SystemClock.uptimeMillis() + 20_000
         while (SystemClock.uptimeMillis() < deadline) {
             var current = emptyMap<String, Int>()
             scenario.onActivity { activity ->
                 val views = findWebViews(activity.window.decorView)
+                measurements = views.map { "progress=${it.progress}, content=${it.contentHeight}, height=${it.height}, scroll=${it.canScrollVertically(1)}" }
                 if (views.size >= minimumCards && views.all {
                     it.progress == 100 && it.contentHeight > 1 && it.height > 0 && !it.canScrollVertically(1)
                 }) {
@@ -290,7 +371,7 @@ class InlineArticleHtmlTest {
             previous = current
             SystemClock.sleep(100)
         }
-        throw AssertionError("Las tarjetas deben terminar de cargar y estabilizar su altura sin scroll interno")
+        throw AssertionError("Las tarjetas deben terminar de cargar y estabilizar su altura sin scroll interno: $measurements")
     }
 
     private fun findWebViews(view: View): List<ArticleWebView> = when (view) {

@@ -31,6 +31,10 @@ Muestra las entradas de CanalTrans que **no** tienen la categoría `Radio`. Cada
 
 Muestra las entradas `Radio` de CanalTrans combinadas con el audio de Audioboom. Las tarjetas contienen título, fecha y resumen; al pulsarlas se abre el detalle con el contenido completo y el reproductor.
 
+Los títulos de las tarjetas omiten el prefijo `ECDQEMSD Podcast `; por ejemplo, `ECDQEMSD Podcast Show 6423 - La Leyenda del Makech` se muestra como `Show 6423 - La Leyenda del Makech`. El título original se conserva en los datos y en el detalle.
+
+Junto al título aparece una miniatura de 56 dp de la primera imagen válida de la descripción, la misma portada del detalle. Admite URLs relativas e imágenes HTTP antiguas solicitadas por HTTPS; si no hay imagen, no reserva espacio. Las imágenes se cargan de forma asíncrona con caché; los previews usan una imagen local sin acceder a la red.
+
 El resumen y el detalle de episodios omiten el contenido de los `<h1>` internos de la descripción, sin eliminar el título principal. La conversión a texto también elimina los marcadores de imagen que podrían aparecer como `[OBJ]` en las tarjetas o previews.
 
 ## Combinación de los RSS
@@ -52,7 +56,7 @@ En el detalle de **Episodios**, el audio se reproduce con un reproductor nativo 
 - No se reproduce automáticamente: requiere una acción del usuario.
 - Continúa al cambiar de aplicación, volver a la lista o apagar/bloquear la pantalla.
 - El servicio en primer plano publica una notificación multimedia con el título y controles para reproducir, pausar y **Detener**. Pausar conserva la posición; detener vacía el reproductor y retira la notificación.
-- El detalle coloca los controles nativos justo debajo de la primera imagen, con barra de posición y duración; si no hay imagen, los coloca al final del contenido. Todo el detalle comparte el mismo desplazamiento. Volver a abrir el episodio se conecta al mismo reproductor sin reiniciarlo.
+- El detalle coloca un reproductor compacto justo debajo de la primera imagen, con iconos independientes de reproducir, pausar y detener, barra de posición y duración; si no hay imagen, lo coloca al final del contenido. Los iconos conservan etiquetas de accesibilidad y áreas táctiles de 48 dp. Todo el detalle comparte el mismo desplazamiento. Volver a abrir el episodio se conecta al mismo reproductor sin reiniciarlo.
 - Usa el audio asociado del feed; si no existe, admite el `src` de un `<audio>` o de su `<source>` en la descripción. Las direcciones HTTP antiguas se solicitan por HTTPS.
 - Los reproductores HTML del detalle se eliminan para evitar audio duplicado; el texto y las imágenes se conservan.
 - Gestiona el foco de audio y pausa al desconectar los auriculares. El reproductor pertenece al servicio, no al ciclo de vida de la actividad.
@@ -168,6 +172,7 @@ Ocultar Noticias en el menú **no elimina la dependencia de CanalTrans**: sus en
 - Los audios se indexan por día y zona horaria; se utiliza búsqueda binaria para encontrar el más cercano.
 - La lista usa `LazyColumn` y paginación local. Se mantienen datos preparados en memoria y se reutilizan conversiones de HTML durante la composición.
 - `ArticleHtmlContent` integra WebView con Compose; las tarjetas de Noticias usan `WRAP_CONTENT` para adoptar automáticamente el alto del HTML mediante la medición nativa de Android, sin calcular ni guardar alturas en Compose. El dibujo se recorta a los límites de cada tarjeta y el documento usa espacio interior en lugar de márgenes del `body`.
+- Las WebViews de altura completa limitan el dibujo a su porción visible para evitar superficies gráficas excesivas y fallos nativos de `RenderThread` al desplazarse dentro de Compose, conservando la aceleración gráfica.
 - Las partículas se actualizan con el reloj de fotogramas de Compose y se dibujan en Canvas, sin recomponer todo el cohete en cada fotograma. Su cantidad está limitada.
 
 **La paginación limita el renderizado, no las descargas.** Cada actualización descarga los feeds completos, dentro del límite de tamaño permitido. No hay caché persistente de feeds ni lectura sin conexión implementada.

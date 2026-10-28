@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -20,9 +22,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -101,59 +105,66 @@ internal fun EpisodeAudioPlayer(entry: RssEntry, audioUrl: String, modifier: Mod
         }
     }
     var seekPosition by remember(audioUrl) { mutableStateOf<Float?>(null) }
-    Card(modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.playback_title), style = MaterialTheme.typography.titleMedium)
-            Row {
-                TextButton(
-                    enabled = (player != null || isPreview) && !connectionError,
+    Card(modifier.fillMaxWidth().semantics { contentDescription = context.getString(R.string.playback_title) }) {
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    modifier = Modifier.size(48.dp),
+                    enabled = (player != null || isPreview) && !connectionError && (!state.current || !state.playWhenReady || state.failed),
                     onClick = {
                         if (player != null) {
-                            if (state.current && state.playWhenReady) {
-                                player.pause()
-                            } else {
-                                if (!state.current) {
-                                    player.setMediaItem(
-                                        MediaItem.Builder().setMediaId(audioUrl).setUri(audioUrl)
-                                            .setMediaMetadata(
-                                                MediaMetadata.Builder()
-                                                    .setTitle(Html.fromHtml(entry.title, Html.FROM_HTML_MODE_COMPACT).toString())
-                                                    .setArtist("En Caso De Que El Mundo Se Desintegre")
-                                                    .build()
-                                            ).build()
-                                    )
-                                }
-                                if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
-                                if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                                player.play()
+                            if (!state.current) {
+                                player.setMediaItem(
+                                    MediaItem.Builder().setMediaId(audioUrl).setUri(audioUrl)
+                                        .setMediaMetadata(
+                                            MediaMetadata.Builder()
+                                                .setTitle(Html.fromHtml(entry.title, Html.FROM_HTML_MODE_COMPACT).toString())
+                                                .setArtist("En Caso De Que El Mundo Se Desintegre")
+                                                .build()
+                                        ).build()
+                                )
                             }
+                            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+                            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                            player.play()
                         }
                     }
                 ) {
-                    Text(stringResource(if (state.current && state.playWhenReady) R.string.playback_pause else R.string.playback_play))
+                    Icon(painterResource(R.drawable.ic_play), contentDescription = stringResource(R.string.playback_play))
                 }
-                TextButton(
+                IconButton(
+                    modifier = Modifier.size(48.dp),
+                    enabled = (player != null || isPreview) && state.current && state.playWhenReady && !state.failed && !connectionError,
+                    onClick = { player?.pause() }
+                ) {
+                    Icon(painterResource(R.drawable.ic_pause), contentDescription = stringResource(R.string.playback_pause))
+                }
+                IconButton(
+                    modifier = Modifier.size(48.dp),
                     enabled = (player != null || isPreview) && state.current && !connectionError,
                     onClick = {
                         player?.stop()
                         player?.clearMediaItems()
                     }
-                ) { Text(stringResource(R.string.playback_stop)) }
-            }
-            Slider(
-                modifier = Modifier.semantics { contentDescription = context.getString(R.string.playback_progress) },
-                value = seekPosition ?: state.position.toFloat().coerceIn(0f, state.duration.coerceAtLeast(1).toFloat()),
-                valueRange = 0f..state.duration.coerceAtLeast(1).toFloat(),
-                enabled = (player != null || isPreview) && state.current && state.duration > 0 && !connectionError,
-                onValueChange = { seekPosition = it },
-                onValueChangeFinished = {
-                    seekPosition?.let { player?.seekTo(it.toLong()) }
-                    seekPosition = null
+                ) {
+                    Icon(painterResource(R.drawable.ic_stop), contentDescription = stringResource(R.string.playback_stop))
                 }
-            )
+                Slider(
+                    modifier = Modifier.weight(1f).semantics { contentDescription = context.getString(R.string.playback_progress) },
+                    value = seekPosition ?: state.position.toFloat().coerceIn(0f, state.duration.coerceAtLeast(1).toFloat()),
+                    valueRange = 0f..state.duration.coerceAtLeast(1).toFloat(),
+                    enabled = (player != null || isPreview) && state.current && state.duration > 0 && !connectionError,
+                    onValueChange = { seekPosition = it },
+                    onValueChangeFinished = {
+                        seekPosition?.let { player?.seekTo(it.toLong()) }
+                        seekPosition = null
+                    }
+                )
+            }
             Text(
                 "${playbackTime(state.position)} / ${playbackTime(state.duration)}",
-                style = MaterialTheme.typography.labelMedium
+                modifier = Modifier.align(Alignment.End),
+                style = MaterialTheme.typography.labelSmall
             )
             if (state.buffering) Text(stringResource(R.string.playback_buffering))
             if (player == null && !connectionError && !isPreview) Text(stringResource(R.string.playback_connecting))

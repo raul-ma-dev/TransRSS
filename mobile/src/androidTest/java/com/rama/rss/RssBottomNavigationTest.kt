@@ -1,15 +1,25 @@
 package com.rama.rss
 
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.util.Base64
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,13 +29,76 @@ import com.rama.rss.reader.RssSource
 import com.rama.rss.reader.RssViewModel
 import com.rama.rss.ui.theme.RssTheme
 import org.junit.Rule
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
 
 @RunWith(AndroidJUnit4::class)
 class RssBottomNavigationTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun episodeThumbnailUsesDetailCoverBesideTheTitle() {
+        val image = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
+        image.eraseColor(Color.MAGENTA)
+        val imageUrl = ByteArrayOutputStream().use {
+            image.compress(Bitmap.CompressFormat.PNG, 100, it)
+            "data:image/png;base64," + Base64.encodeToString(it.toByteArray(), Base64.NO_WRAP)
+        }
+        image.recycle()
+        val entry = RssEntry(
+            "ECDQEMSD Podcast Show 6423 - La Leyenda del Makech",
+            """<p align="center"><img src="$imageUrl"></p><p>Descripción</p><img src="https://example.com/other.jpg">""",
+            "", ""
+        )
+        var clicks = 0
+        compose.setContent {
+            RssTheme(darkTheme = true, dynamicColor = false) {
+                Column {
+                    AudioboomSummaryCard(entry, onClick = { clicks++ })
+                    AudioboomSummaryCard(entry.copy(title = "Sin portada", html = ""), onClick = {})
+                }
+            }
+        }
+        val thumbnail = compose.onNodeWithTag("EpisodeThumbnail", useUnmergedTree = true)
+        thumbnail.assertIsDisplayed()
+        compose.onAllNodesWithTag("EpisodeThumbnail", useUnmergedTree = true).assertCountEquals(1)
+        assertEquals(imageUrl, episodeCoverUrl(entry.html, entry.baseUrl))
+        val titleBounds = compose.onNodeWithText("Show 6423 - La Leyenda del Makech", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val imageBounds = thumbnail.getUnclippedBoundsInRoot()
+        assertEquals(56f, (imageBounds.right - imageBounds.left).value, 1f)
+        assertEquals(56f, (imageBounds.bottom - imageBounds.top).value, 1f)
+        assertTrue("La miniatura debe estar a la derecha del título", imageBounds.left >= titleBounds.right)
+        assertTrue("La miniatura y el título deben compartir la misma fila", imageBounds.top < titleBounds.bottom && titleBounds.top < imageBounds.bottom)
+        compose.waitUntil(10_000) {
+            val pixels = thumbnail.captureToImage().toPixelMap()
+            pixels[pixels.width / 2, pixels.height / 2].toArgb() == Color.MAGENTA
+        }
+        compose.onAllNodesWithTag("AudioboomArticleCard")[0].assertHasClickAction().performClick()
+        compose.runOnIdle { assertEquals(1, clicks) }
+    }
+
+    @Test
+    fun episodeCardsRemoveOnlyTheLeadingPodcastLabel() {
+        val entry = RssEntry("ECDQEMSD Podcast Show 6423 - La Leyenda del Makech", "", "", "")
+        val otherTitle = "Una historia sobre ECDQEMSD Podcast"
+        compose.setContent {
+            RssTheme(darkTheme = true, dynamicColor = false) {
+                Column {
+                    AudioboomSummaryCard(entry, onClick = {})
+                    AudioboomSummaryCard(entry.copy(title = otherTitle), onClick = {})
+                }
+            }
+        }
+        compose.onNodeWithText("Show 6423 - La Leyenda del Makech").assertIsDisplayed()
+        compose.onNodeWithText(entry.title).assertDoesNotExist()
+        compose.onNodeWithText(otherTitle).assertIsDisplayed()
+        assertEquals("ECDQEMSD Podcast Show 6423 - La Leyenda del Makech", entry.title)
+        assertTrue(articleDocument(entry, audioDetail = true, nativeAudio = true).contains("<h1>${entry.title}</h1>"))
+    }
 
     @Test
     fun canaltransIsInlineAndAudioboomSummaryOpensDetail() {

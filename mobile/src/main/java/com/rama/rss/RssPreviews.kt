@@ -21,7 +21,7 @@ private val SampleArticle = RssEntry(
 )
 
 private val SampleCombinedEpisode = SampleArticle.copy(
-    title = "Radio de Canaltrans",
+    title = "ECDQEMSD Podcast Show 6423 - Historias para descubrir",
     html = "<img src=\"https://example.com/portada.jpg\" alt=\"Portada\">" + SampleArticle.html,
     categories = listOf("Radio", "Podcast"),
     audioUrl = "https://example.com/episodio.mp3",

@@ -10,4 +10,5 @@
     <string name="playback_error">No se pudo reproducir el audio. Comprueba tu conexión e inténtalo de nuevo.</string>
     <string name="playback_invalid_url">El episodio no incluye una dirección de audio HTTPS válida.</string>
     <string name="playback_progress">Posición del audio</string>
+    <string name="episode_thumbnail">Miniatura del episodio: %1$s</string>
 </resources>

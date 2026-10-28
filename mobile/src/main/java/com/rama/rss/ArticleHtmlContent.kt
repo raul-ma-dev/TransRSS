@@ -1,6 +1,8 @@
 package com.rama.rss
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.webkit.WebResourceRequest
@@ -112,6 +114,23 @@ private fun ArticleHtmlContentPreview() {
 
 internal class ArticleWebView(context: Context) : WebView(context) {
     var fitContent = false
+    private val visibleContent = Rect()
+
+    override fun draw(canvas: Canvas) {
+        if (!fitContent) {
+            super.draw(canvas)
+            return
+        }
+        // Bound WebView's intermediate GPU surface to the viewport, not the full HTML height.
+        if (!getLocalVisibleRect(visibleContent)) return
+        val checkpoint = canvas.save()
+        try {
+            canvas.clipRect(visibleContent)
+            super.draw(canvas)
+        } finally {
+            canvas.restoreToCount(checkpoint)
+        }
+    }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val handled = super.onTouchEvent(event)

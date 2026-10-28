@@ -38,7 +38,7 @@ class EpisodePlaybackTest {
 
     @Test
     fun serviceKeepsPlayingInBackgroundWithScreenOffAndNotificationControlsWork() {
-        val audio = createAudioFile()
+        val audio = createPlaybackTestAudio(context)
         val power = context.getSystemService(PowerManager::class.java)
         val notifications = context.getSystemService(NotificationManager::class.java)
         val wasInteractive = power.isInteractive
@@ -104,7 +104,7 @@ class EpisodePlaybackTest {
 
     @Test
     fun connectingAndReconnectingDoNotAutoplayOrResetPlayback() {
-        val audio = createAudioFile()
+        val audio = createPlaybackTestAudio(context)
         var first: MediaController? = null
         var second: MediaController? = null
         try {
@@ -173,17 +173,18 @@ class EpisodePlaybackTest {
         ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use { it.readBytes() }
     }
 
-    private fun createAudioFile(): File {
-        val samples = 8_000 * 60
-        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
-            .put("RIFF".toByteArray()).putInt(36 + samples * 2).put("WAVEfmt ".toByteArray())
-            .putInt(16).putShort(1).putShort(1).putInt(8_000).putInt(16_000).putShort(2).putShort(16)
-            .put("data".toByteArray()).putInt(samples * 2).array()
-        return File.createTempFile("episode-playback-", ".wav", context.cacheDir).apply {
-            outputStream().use {
-                it.write(header)
-                it.write(ByteArray(samples * 2))
-            }
+}
+
+internal fun createPlaybackTestAudio(context: Context): File {
+    val samples = 8_000 * 60
+    val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        .put("RIFF".toByteArray()).putInt(36 + samples * 2).put("WAVEfmt ".toByteArray())
+        .putInt(16).putShort(1).putShort(1).putInt(8_000).putInt(16_000).putShort(2).putShort(16)
+        .put("data".toByteArray()).putInt(samples * 2).array()
+    return File.createTempFile("episode-playback-", ".wav", context.cacheDir).apply {
+        outputStream().use {
+            it.write(header)
+            it.write(ByteArray(samples * 2))
         }
     }
 }

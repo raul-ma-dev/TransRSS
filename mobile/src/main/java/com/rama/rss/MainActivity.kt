@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -68,6 +69,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import coil3.compose.AsyncImage
 import com.rama.rss.reader.RssEntry
 import com.rama.rss.reader.FEED_PAGE_SIZE
 import com.rama.rss.reader.RssFeed
@@ -249,7 +251,10 @@ internal fun RssReader(
                 }
                 items(visibleEntries) { entry ->
                     if (source == RssSource.AUDIOBOOM) {
-                        AudioboomSummaryCard(entry, onClick = { selectedEntryKey = articleKey(entry) })
+                        AudioboomSummaryCard(
+                            entry, onClick = { selectedEntryKey = articleKey(entry) },
+                            baseUrl = entry.baseUrl.ifBlank { feed?.baseUrl.orEmpty() }
+                        )
                     } else {
                         FeedArticleCard(entry, entry.baseUrl.ifBlank { feed?.baseUrl.orEmpty() })
                     }
@@ -272,16 +277,40 @@ internal fun RssReader(
 private fun articleKey(entry: RssEntry): String = "${entry.link}\u0000${entry.title}\u0000${entry.date}"
 
 @Composable
-internal fun AudioboomSummaryCard(entry: RssEntry, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val title = remember(entry.title) { plainText(entry.title) }
+internal fun AudioboomSummaryCard(
+    entry: RssEntry,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    baseUrl: String = entry.baseUrl
+) {
+    val title = remember(entry.title) { plainText(entry.title).removePrefix("ECDQEMSD Podcast ").trimStart() }
     val summary = remember(entry.html) { plainText(withoutDescriptionHeading(entry.html)) }
     val date = remember(entry.date) { formatRssDate(entry.date) }
+    val coverUrl = remember(entry.html, baseUrl) { episodeCoverUrl(entry.html, baseUrl) }
+    val isPreview = LocalInspectionMode.current
     Card(onClick = onClick, modifier = modifier.fillMaxWidth().testTag("AudioboomArticleCard")) {
         Column(
             Modifier.fillMaxWidth().background(readerBackground()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                if (coverUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = if (isPreview) R.drawable.ecdqemsd else coverUrl,
+                        contentDescription = stringResource(R.string.episode_thumbnail, title),
+                        placeholder = painterResource(if (isPreview) R.drawable.ecdqemsd else R.drawable.ic_headphones),
+                        error = painterResource(R.drawable.ic_headphones),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.small).testTag("EpisodeThumbnail"),
+                        onError = { Log.w("EpisodeCover", "Cannot load episode thumbnail", it.result.throwable) }
+                    )
+                }
+            }
             if (entry.date.isNotBlank()) {
                 Text(date, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -428,7 +457,9 @@ internal fun ArticlePreviewContent(
                 Text("Imagen del episodio", modifier = Modifier.align(Alignment.Center))
             }
         }
-        if (entry.audioUrl.isNotBlank() ||
+        if (audioDetail && entry.audioUrl.isNotBlank()) {
+            EpisodeAudioPlayer(entry, entry.audioUrl)
+        } else if (entry.audioUrl.isNotBlank() ||
             (!audioDetail && Regex("<audio\\b", RegexOption.IGNORE_CASE).containsMatchIn(entry.html))
         ) {
             Card(Modifier.fillMaxWidth()) {
